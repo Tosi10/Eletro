@@ -1,14 +1,14 @@
 import { StyleSheet, Text, View } from 'react-native'
 import React from 'react'
 
-const profile = () => {
+const BookMark = () => {
   return (
-    <View className="flex-1 items-center justify-center bg-red-300">
-      <Text>dfdfdfdf</Text>
+    <View>
+      <Text>Bookmark</Text>
     </View>
   )
 }
 
-export default profile
+export default BookMark
 
 const styles = StyleSheet.create({})
