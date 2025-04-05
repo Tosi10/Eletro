@@ -7,6 +7,7 @@ import { images } from '../../constants'
 import FormField from '../../components/FormField'
 import CustomButton  from '../../components/CustomButton'
 import { createUser } from '../../lib/appwrite'
+import { useGlobalContext } from '../../context/GlobalProvider'
 
 const SignUp = () => {
   const [form, setForm] = useState({
@@ -27,7 +28,10 @@ const SignUp = () => {
 
     try {
 
-      const result = await createUser(form.email, form.password, form.username) 
+      const result = await createUser(form.email, form.password, form.username);
+      setUser(result);
+      setIsLogged(true);
+      
 
       router.replace('/home')
       
