@@ -6,12 +6,13 @@ import SearchInput from '../../components/SearchInput';
 import Trending from '../../components/Trending';
 import EmptyState from '../../components/EmptyState';
 import { useState } from 'react';
-import { getAllPosts } from '../../lib/appwrite';
+import { getAllPosts , getLatestPosts} from '../../lib/appwrite';
 import useAppwrite from '../../lib/useAppwrite';
 import VideoCard from '../../components/VideoCard';
 
 const Home = () => {
-  const { data: posts } = useAppwrite(getAllPosts);
+  const { data: posts, refetch } = useAppwrite(getAllPosts);
+  const { data: latestPosts } = useAppwrite(getLatestPosts);
 
   const [refreshing, setRefreshing] = useState(false)
 
@@ -26,8 +27,7 @@ const Home = () => {
     <SafeAreaView className="bg-primary border-2 h-full">
       <FlatList
         data={posts}
-        
-        keyExtractor={(item, index) => index.toString()} // Garante que cada item tenha uma key única
+        keyExtractor={(item) => item.$id}
         renderItem={({ item }) => (
           <VideoCard video={item}/>
         )}
@@ -59,7 +59,7 @@ const Home = () => {
                 Latest Videos
               </Text>
 
-              <Trending posts={[{ id: 1 }, { id: 2 }, { id: 3 }] ?? []}/>
+              <Trending posts={latestPosts ?? []}/>
             </View>
           </View>
         )}
