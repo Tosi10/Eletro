@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { getCurrentUser } from "../lib/appwrite";
+import { getCurrentUser, getUserProfile } from "../lib/appwrite";
 
 const GlobalContext = createContext();
 export const useGlobalContext = () => useContext(GlobalContext);
@@ -10,26 +10,36 @@ const GlobalProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    console.log('GlobalProvider: Chamando getCurrentUser...');
-    getCurrentUser()
-      .then((res) => {
-        console.log('GlobalProvider: Usuário retornado pelo getCurrentUser:', res);
-        if (res) {
-          setIsLogged(true);
-          setUser(res);
+    const fetchUser = async () => {
+      console.log('GlobalProvider: Chamando getCurrentUser...');
+      try {
+        const currentUser = await getCurrentUser();
+        console.log('GlobalProvider: Usuário retornado pelo getCurrentUser:', currentUser);
+        if (currentUser) {
+          // Busca o perfil completo na coleção de usuários
+          const userProfile = await getUserProfile(currentUser.$id);
+          if (userProfile) {
+            setUser(userProfile);
+            setIsLogged(true);
+          } else {
+            setUser(null);
+            setIsLogged(false);
+          }
         } else {
-          console.warn('GlobalProvider: Usuário não autenticado.');
-          setIsLogged(false);
           setUser(null);
+          setIsLogged(false);
         }
-      })
-      .catch((error) => {
+      } catch (error) {
         console.error('GlobalProvider: Erro ao buscar usuário:', error);
-      })
-      .finally(() => {
+        setUser(null);
+        setIsLogged(false);
+      } finally {
         setLoading(false);
         console.log('GlobalProvider: Finalizado o carregamento.');
-      });
+      }
+    };
+
+    fetchUser();
   }, []);
 
   return (

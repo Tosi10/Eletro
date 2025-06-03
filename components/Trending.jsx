@@ -2,17 +2,19 @@ import { StyleSheet, Text, View, FlatList, TouchableOpacity, ImageBackground, Im
 import * as Animatable from 'react-native-animatable';
 import { useState, useRef } from 'react';
 import { icons } from '../constants';
-import { Video } from 'expo-video';
-
+import { useVideoPlayer, VideoView } from "expo-video";
+import { WebView } from 'react-native-webview';
 const zoomIn = {
   0: { scale: 0.9 },
-  1: { scale: 1 },
+  1: { scale: 1.1 },
 };
 
 const zoomOut = {
-  0: { scale: 1 },
+  0: { scale: 1.1 },
   1: { scale: 0.9 },
 };
+
+
 
 const TrendingItem = ({ activeItem, item }) => {
   const [play, setPlay] = useState(false);
@@ -24,11 +26,10 @@ const TrendingItem = ({ activeItem, item }) => {
       duration={500}
     >
       {play ? (
-        <Video
-          source={{ uri: item.video }}
+        <WebView
+          source={{ uri: item.video }} // URL do Vimeo
           style={{ width: 200, height: 300, borderRadius: 35 }}
-          resizeMode="cover"
-          shouldPlay
+          allowsFullscreenVideo
         />
       ) : (
         <TouchableOpacity

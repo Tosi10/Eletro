@@ -40,7 +40,7 @@ const RootLayout = () => {
       <Stack.Screen name='index' />
       <Stack.Screen name='auth' />
       <Stack.Screen name='tabs'/>
-      <Stack.Screen name="/search/[query]" />
+      <Stack.Screen name="search/[query]" />
 
     </Stack>
     </GlobalProvider>
@@ -49,5 +49,3 @@ const RootLayout = () => {
   
 }
 export default RootLayout
-
-const styles = StyleSheet.create({})
