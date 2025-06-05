@@ -51,23 +51,8 @@ const TabsLayout = () => {
             )
           }}
         />
-              <Tabs.Screen 
-          name="bookmark"
-          options={{
-            title:'Book',
-            headerShown: false,
-            tabBarIcon: ({ color, focused }) => (
-              <TabIcon
-              
-                icon={icons.bookmark}
-                color={color}
-                name="Book"
-                focused={focused}
-               />
-            )
-          }}
-        />
-              <Tabs.Screen
+        
+             /* <Tabs.Screen
           name="create"
           options={{
             title:'Create',
@@ -104,4 +89,4 @@ const TabsLayout = () => {
 
 export default TabsLayout;
 
-const styles = StyleSheet.create({});
+

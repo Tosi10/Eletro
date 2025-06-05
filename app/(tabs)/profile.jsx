@@ -4,21 +4,26 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { icons, images } from '../../constants';
 import Trending from '../../components/Trending';
 import EmptyState from '../../components/EmptyState';
-import { getUserPosts } from '../../lib/appwrite';
+import { getUserPosts, signOut } from '../../lib/appwrite';
 import useAppwrite from '../../lib/useAppwrite';
 import VideoCard from '../../components/VideoCard';
 import { useLocalSearchParams } from 'expo-router';
 import { useGlobalContext } from '../../context/GlobalProvider';
 import { TouchableOpacity } from 'react-native';
 import InfoBox from '../../components/InfoBox';
+import { router } from 'expo-router';
 
 const Profile = () => {
   const { user, setUser, setIsLogged } = useGlobalContext();
   const { data: posts } = useAppwrite(() => getUserPosts(user.$id));
   const [refreshing, setRefreshing] = useState(false);
 
-  const logout = () => { 
+  const logout = async () => { 
+    await signOut();
+    setUser(null);
+    setIsLogged(false);
 
+    router.replace('/sign-in')
   }
 console.log("Avatar URL:", user?.avatar);
   return (

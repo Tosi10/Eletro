@@ -38,7 +38,7 @@ const VideoCard = ({ video }) => {
       {play ? (
         <WebView
         source={{ uri:videoUrl }} // URL do Vimeo
-        style={{ width: 400, height: 300, borderRadius: 300, backgroundColor:'black',  borderColor: 'red', borderWidth: 20 }}
+        style={{ width: 380, height: 280, borderRadius: 30, backgroundColor:'black', borderWidth: 20 }}
         allowsFullscreenVideo
       />
       ) : (
