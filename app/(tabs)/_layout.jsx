@@ -52,7 +52,7 @@ const TabsLayout = () => {
           }}
         />
         
-             /* <Tabs.Screen
+              <Tabs.Screen
           name="create"
           options={{
             title:'Create',
@@ -67,6 +67,21 @@ const TabsLayout = () => {
             )
           }}
         />
+        <Tabs.Screen
+          name="calendar"
+          options={{
+          title: 'Agenda',
+          headerShown: false,
+          tabBarIcon: ({ color, focused }) => (
+        <TabIcon
+          icon={icons.plus} // Adicione um ícone de calendário em constants/icons.js se ainda não tiver
+          color={color}
+          name="Agen"
+          focused={focused}
+        />
+      ),
+     }}
+   />
               <Tabs.Screen
           name="profile"
           options={{

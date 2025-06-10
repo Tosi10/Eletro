@@ -1,61 +1,64 @@
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View , ScrollView, Image} from 'react-native';
+import { StyleSheet, Text, View, ScrollView, ImageBackground, Image } from 'react-native';
 import { Redirect, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import  { images } from '../constants';
+import { images } from '../constants';
 import CustomButton from '../components/CustomButton';
 import { useGlobalContext } from '../context/GlobalProvider';
 
-
-
 export default function App() {
-  const {isLoading, isLogged} = useGlobalContext();
+  const { isLoading, isLogged } = useGlobalContext();
 
-  if(!isLoading && isLogged) return <Redirect href="/home" />
+  if (!isLoading && isLogged) return <Redirect href="/home" />;
 
   return (
-    <SafeAreaView className="bg-primary h-full">
-      <ScrollView contentContainerStyle={{ height: '100%' }}>
-        <View className="w-full items-center justify-center  min-h-[84vh] px-4">
-          <Image 
-            source={images.logo}
-            className="w-[130px] h-[84px]"
-            resizeMode='contain'
-          />
+    <SafeAreaView className="h-full flex-1">
+      <ImageBackground
+        source={images.cardio}
+        resizeMode="cover"
+        style={{ flex: 1, width: '100%', height: '100%' }}
+      >
+        {/* Overlay para suavizar a imagem de fundo */}
+        <View
+          pointerEvents="none"
+          style={{
+            ...StyleSheet.absoluteFillObject,
+            backgroundColor: 'rgba(0,0,0,0.2)',
+            zIndex: 1,
+          }}
+        />
 
-          <Image
-            source={images.cards}
-            className="max-w-[380px] w-full h-[300px]"
-            resizeMode='contain'
-          />
+        <ScrollView contentContainerStyle={{ flexGrow: 1, zIndex: 2 }}>
+          <View className="w-full items-center justify-center min-h-[84vh] px-4">
+            {/* Remova a imagem do topo, pois agora é o background */}
 
-          <View className="relative mt-5">
-            <Text className="text-3xl text-white font-bold text-center">Discover all the shit in our awesome {' '}
-            <Text className="text-secondary-200">Aora</Text>
+            <View className="relative mt-5">
+              <Text className="text-3xl text-white font-bold text-center">
+                Cardio Care{' '}
+                {/*<Text className="text-secondary-200">M2</Text>*/}
+              </Text>
+
+              {/*<Image
+                source={images.path}
+                className="w-[120px] h-[15px] absolute -bottom-3 -right-12"
+                resizeMode="contain"
+              />*/}
+            </View>
+
+            <Text className="text-md font-pregular text-gray-100 mt-7 text-center">
+              Eletrocardiogramas.
             </Text>
 
-            <Image
-              source={images.path}
-              className="w-[136px] h-[15px] absolute -bottom-3 -right-0"
-              resizeMode='contain'
+            <CustomButton
+              title="Continue with E-mail"
+              handlePress={() => router.push('/sign-in')}
+              containerStyles="w-full mt-7"
             />
-            
           </View>
+        </ScrollView>
 
-          <Text className="text-sm font-pregular text-gray-100 mt-7 text-center"> Where creativity meets inovation:
-          embark on a journey of  limitless exploration with Aora.
-          </Text>
-
-          <CustomButton
-            title="Continue with E-mail"
-            handlePress={() => router.push('/sign-in')}
-            containerStyles="w-full mt-7"
-          />
-          
-        </View>
-      </ScrollView>
-
-      <StatusBar backgroundColor='#161622' style='light'/>
+        <StatusBar backgroundColor="#161622" style="light" />
+      </ImageBackground>
     </SafeAreaView>
   );
 }
