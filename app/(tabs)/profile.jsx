@@ -97,8 +97,8 @@ const Profile = () => {
               />
 
               <InfoBox
-                title="1.2K" // Este é um valor fixo, pode ajustar ou remover
-                subtitle="Seguidores" // Pode mudar para algo como "Laudos Recebidos" ou remover
+                title="0" // Este é um valor fixo, pode ajustar ou remover
+                subtitle="Recebidos" // Pode mudar para algo como "Laudos Recebidos" ou remover
                 titleStyles="text-xl"
               />
             </View>

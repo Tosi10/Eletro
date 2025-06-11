@@ -210,7 +210,7 @@ const Create = () => {
                       onPress={() => setForm({ ...form, priority: 'Eminente' })}
                       className={`py-2 px-5 rounded-lg ${form.priority === 'Eminente' ? 'bg-orange-500' : 'bg-gray-800 border border-gray-700'}`}
                   >
-                      <Text className="text-white font-pmedium">Eminente</Text>
+                      <Text className="text-white font-pmedium">Eletivo</Text>
                   </TouchableOpacity>
               </View>
           </View>
@@ -241,7 +241,7 @@ const Create = () => {
 
           {/* Campo Observações */}
           <FormField
-            title="Observações Adicionais"
+            title="Caso Clínico"
             value={form.notes}
             placeholder="Descreva quaisquer observações importantes sobre o exame..."
             handleChangeText={(e) => setForm({ ...form, notes: e })}
