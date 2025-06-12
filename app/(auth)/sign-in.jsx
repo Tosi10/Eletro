@@ -11,7 +11,8 @@ import { getCurrentUser, signIn, ensureUserProfile } from '../../lib/appwrite'
 import { useGlobalContext } from '../../context/GlobalProvider';
 
 const SignIn = () => {
-  const { setUser, setIsLogged } = useGlobalContext();
+  // Desestruturamos refetchUser do contexto global
+  const { setUser, setIsLogged, refetchUser } = useGlobalContext();
 
   const [form, setForm] = useState({
     email: '',
@@ -29,18 +30,28 @@ const SignIn = () => {
     setIsSubmitting(true);
 
     try {
+      // Tenta fazer o login
       await signIn(form.email, form.password);
-      const result = await getCurrentUser();
-      if (result) {
-        await ensureUserProfile(result); // Garante que o perfil existe!
-        setUser(result);
-        setIsLogged(true);
+      
+      // Após o login, aciona a busca de usuário novamente no GlobalProvider
+      // Isso garantirá que o objeto 'user' no contexto global seja atualizado com o role
+      await refetchUser(); 
 
-        Alert.alert('Success', 'Login successful');
-        router.replace('/home');
+      // O refetchUser já vai setar o user e isLogged no contexto,
+      // então as linhas abaixo podem ser redundantes se refetchUser for bem-sucedido.
+      // No entanto, as mantemos por segurança caso o GlobalProvider mude sua implementação.
+      const currentUser = await getCurrentUser(); 
+      if (currentUser) {
+        await ensureUserProfile(currentUser); // Garante que o perfil existe!
+        // setUser(currentUser); // Já é feito pelo refetchUser
+        // setIsLogged(true); // Já é feito pelo refetchUser
       }
+
+      Alert.alert('Success', 'Login successful');
+      router.replace('/home'); // Redireciona para a tela inicial
     } catch (error) {
       Alert.alert('Error', error.message);
+      console.error("Erro durante o processo de login:", error); // Adicionado console.error para mais detalhes
     } finally {
       setIsSubmitting(false);
     }
@@ -54,11 +65,8 @@ const SignIn = () => {
         style={{ flex: 1, width: '100%', height: '100%' }}
       >
         {/* Overlay para escurecer a imagem e melhorar a leitura */}
-        <View pointerEvents="none" style={{
-          ...StyleSheet.absoluteFillObject,
-          backgroundColor: 'rgba(0,0,0,0.2)',
-          zIndex: 1
-        }} />
+        {/* Usando classes Tailwind para o overlay para consistência */}
+        <View pointerEvents="none" className="absolute inset-0 bg-black/20 z-10" />
 
         <ScrollView contentContainerStyle={{ flexGrow: 1, zIndex: 2 }}>
           <View className="w-full justify-center min-h-[100vh] px-8 my-3">
@@ -79,7 +87,7 @@ const SignIn = () => {
               value={form.password}
               handleChangeText={(e) => setForm({ ...form, password: e })}
               otherStyles="mt-7"
-            />
+              />
 
             <CustomButton
               title="Sign in"

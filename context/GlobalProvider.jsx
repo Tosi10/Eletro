@@ -7,57 +7,58 @@ export const useGlobalContext = () => useContext(GlobalContext);
 const GlobalProvider = ({ children }) => {
   const [isLogged, setIsLogged] = useState(false);
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // Começa como true
 
-  useEffect(() => {
-    const fetchUser = async () => {
-      console.log('GlobalProvider: Iniciando verificação de usuário...');
-      try {
-        const currentUserAppwrite = await getCurrentUser();
+  // Função para encapsular a lógica de busca do usuário
+  // Agora pode ser chamada de fora para re-buscar o usuário
+  const fetchUser = async () => {
+    console.log('GlobalProvider: Iniciando verificação de usuário...');
+    setLoading(true); // Garante que loading é true no início da busca
+    let fetchedUser = null; 
 
-        if (currentUserAppwrite) {
-          // Busca o perfil do usuário na coleção de usuários
-          const userProfileDocument = await getUserProfile(currentUserAppwrite.$id);
+    try {
+      const currentUserAppwrite = await getCurrentUser();
 
-          if (userProfileDocument) {
-            setUser(userProfileDocument);
-            setIsLogged(true);
-            console.log('GlobalProvider: Usuário autenticado e perfil carregado.', userProfileDocument);
-          } else {
-            // Caso raro: usuário Appwrite existe, mas não tem perfil na coleção
-            console.warn('GlobalProvider: Conta Appwrite encontrada, mas documento de perfil não na coleção de usuários.');
-            setUser(null);
-            setIsLogged(false);
-          }
+      if (currentUserAppwrite) {
+        const userProfileDocument = await getUserProfile(currentUserAppwrite.$id);
+
+        if (userProfileDocument) {
+          fetchedUser = userProfileDocument; 
+          setIsLogged(true);
+          console.log('GlobalProvider: Usuário autenticado e perfil carregado. Detalhes do perfil:', JSON.stringify(userProfileDocument, null, 2));
+          console.log('GlobalProvider: Role do usuário:', userProfileDocument.role);
         } else {
-          // Usuário não logado ou sessão expirada
-          console.log('GlobalProvider: Nenhuma sessão ativa. Usuário não autenticado.');
-          setUser(null);
+          console.warn('GlobalProvider: Conta Appwrite encontrada, mas documento de perfil não na coleção de usuários.');
           setIsLogged(false);
         }
-      } catch (error) {
-        // Trata erro de sessão expirada ou usuário guest sem scope
-        if (
-          error?.message?.includes('missing scope(account)') ||
-          error?.message?.includes('User (role: guests) missing scope (account)')
-        ) {
-          console.log('GlobalProvider: Usuário não autenticado (guest).');
-        } else {
-          console.error('GlobalProvider: Erro inesperado no fetchUser:', error);
-        }
-        setUser(null);
+      } else {
+        console.log('GlobalProvider: Nenhuma sessão ativa. Usuário não autenticado.');
         setIsLogged(false);
-      } finally {
-        setLoading(false);
-        console.log('GlobalProvider: Verificação de usuário finalizada.');
       }
-    };
+    } catch (error) {
+      if (
+        error?.message?.includes('missing scope(account)') ||
+        error?.message?.includes('User (role: guests) missing scope (account)')
+      ) {
+        console.log('GlobalProvider: Usuário não autenticado (guest).');
+      } else {
+        console.error('GlobalProvider: Erro inesperado no fetchUser:', error);
+      }
+      setIsLogged(false); 
+    } finally {
+      setUser(fetchedUser); 
+      setLoading(false); 
+      console.log('GlobalProvider: Verificação de usuário finalizada.');
+    }
+  };
 
-    fetchUser();
-  }, []);
+  useEffect(() => {
+    fetchUser(); // Chamada inicial ao montar o componente
+  }, []); // Sem dependências para rodar apenas uma vez na montagem
 
+  // Adicionamos 'refetchUser: fetchUser' ao valor do contexto
   return (
-    <GlobalContext.Provider value={{ isLogged, setIsLogged, user, setUser, isLoading: loading }}>
+    <GlobalContext.Provider value={{ isLogged, setIsLogged, user, setUser, isLoading: loading, refetchUser: fetchUser }}>
       {children}
     </GlobalContext.Provider>
   );
