@@ -78,7 +78,7 @@ const EcgCard = ({ ecg }) => {
         <Text className="text-gray-100 font-pregular text-base">
           Prioridade: <Text className={`font-psemibold ${
             priority === 'Urgente' ? 'text-red-400' : 
-            priority === 'Eminente' ? 'text-orange-400' : 'text-white'
+            priority === 'Eletivo' ? 'text-orange-400' : 'text-white'
           }`}>
             {priority || 'N/A'}
           </Text>

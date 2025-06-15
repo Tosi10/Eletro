@@ -55,7 +55,7 @@ const TrendingItem = ({ activeItem, item }) => {
 
 const Trending = ({ posts }) => {
   if (!posts || posts.length === 0) {
-    return <Text>Nenhum vídeo encontrado.</Text>;
+    return <Text>Nenhum ECG encontrado.</Text>;
   }
 
   const [activeItem, setActiveItem] = useState(posts[0]?.$id || null);

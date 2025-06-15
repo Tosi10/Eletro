@@ -50,7 +50,7 @@ const SignIn = () => {
       Alert.alert('Success', 'Login successful');
       router.replace('/home'); // Redireciona para a tela inicial
     } catch (error) {
-      Alert.alert('Error', error.message);
+      Alert.alert('Erro', error.message);
       console.error("Erro durante o processo de login:", error); // Adicionado console.error para mais detalhes
     } finally {
       setIsSubmitting(false);
@@ -58,17 +58,20 @@ const SignIn = () => {
   };
 
   return (
-    <SafeAreaView className="h-full flex-1">
-      <ImageBackground
-        source={images.cardio2}
-        resizeMode="cover"
-        style={{ flex: 1, width: '100%', height: '100%' }}
-      >
-        {/* Overlay para escurecer a imagem e melhorar a leitura */}
-        {/* Usando classes Tailwind para o overlay para consistência */}
-        <View pointerEvents="none" className="absolute inset-0 bg-black/20 z-10" />
+    // ImageBackground AGORA FORA da SafeAreaView e cobrindo toda a tela
+    <ImageBackground
+      source={images.cardio2}
+      resizeMode="cover"
+      // Estilo para cobrir 100% da largura e altura da tela
+      style={StyleSheet.absoluteFillObject} // Isso fará com que a imagem preencha a tela inteira
+    >
+      {/* Overlay para escurecer a imagem e melhorar a leitura */}
+      {/* Usando classes Tailwind para o overlay para consistência */}
+      <View pointerEvents="none" className="absolute inset-0 bg-black/20 z-10" />
 
-        <ScrollView contentContainerStyle={{ flexGrow: 1, zIndex: 2 }}>
+      {/* SafeAreaView agora envolve apenas o conteúdo que precisa de áreas seguras */}
+      <SafeAreaView className="h-full flex-1" style={{ zIndex: 2, backgroundColor: 'transparent' }}>
+        <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
           <View className="w-full justify-center min-h-[100vh] px-8 my-3">
             <Text className="text-3xl text-black text-semibold mt-10 font-psemibold">
               Log in
@@ -77,6 +80,7 @@ const SignIn = () => {
             <FormField
               title="Email"
               value={form.email}
+              placeholder="Email" // Adicionado placeholder para clareza
               handleChangeText={(e) => setForm({ ...form, email: e })}
               otherStyles="mt-7"
               keyboardType="email-address"
@@ -85,6 +89,7 @@ const SignIn = () => {
             <FormField
               title="Password"
               value={form.password}
+              placeholder="Senha" // Adicionado placeholder para clareza
               handleChangeText={(e) => setForm({ ...form, password: e })}
               otherStyles="mt-7"
               />
@@ -104,8 +109,8 @@ const SignIn = () => {
             </View>
           </View>
         </ScrollView>
-      </ImageBackground>
-    </SafeAreaView>
+      </SafeAreaView>
+    </ImageBackground>
   );
 };
 
