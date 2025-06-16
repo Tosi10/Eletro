@@ -3,35 +3,33 @@ import { View, Text, ScrollView, Image, TouchableOpacity, ActivityIndicator, Ale
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getPendingEcgs, updateEcgLaudation } from '../../lib/appwrite';
 import { useGlobalContext } from '../../context/GlobalProvider';
-import FormField from '../../components/FormField'; // Reutilizando FormField
-import CustomButton from '../../components/CustomButton'; // Reutilizando CustomButton
-import EcgCard from '../../components/EcgCard'; // Para exibir os detalhes do ECG
-import { useRouter } from 'expo-router'; // Importar useRouter para navegação
-import { icons } from '../../constants'; // <<< ADICIONADO: Importação do objeto icons
+import FormField from '../../components/FormField';
+import CustomButton from '../../components/CustomButton';
+import EcgCard from '../../components/EcgCard';
+import { useRouter } from 'expo-router';
+import { icons } from '../../constants';
 
 const Laudo = () => {
   const { user } = useGlobalContext();
-  const router = useRouter(); // Instância do router
-  const [selectedPriorityType, setSelectedPriorityType] = useState(null); // 'Urgente', 'Eletivo', ou null
-  const [selectedEcg, setSelectedEcg] = useState(null); // ECG selecionado para laudar
-  const [loadingEcgs, setLoadingEcgs] = useState(false); // Começa como false, já que a busca inicial só ocorre com tipo selecionado
+  const router = useRouter();
+  const [selectedPriorityType, setSelectedPriorityType] = useState(null);
+  const [selectedEcg, setSelectedEcg] = useState(null);
+  const [loadingEcgs, setLoadingEcgs] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Estado do formulário de laudo baseado nos detalhes da imagem
   const [laudoForm, setLaudoForm] = useState({
     ritmo: '',
     fc: '',
     pr: '',
     qrs: '',
     eixo: '',
-    brc: false, // Bloqueio de Ramo Completo
-    brd: false, // Bloqueio de Ramo Direito
+    brc: false,
+    brd: false,
     repolarizacao: '',
-    outrosAchados: '', // Campo de texto livre
-    laudoFinal: '', // Campo de texto para o laudo completo
+    outrosAchados: '',
+    laudoFinal: '', // Este será preenchido automaticamente
   });
 
-  // Opções para os campos de seleção
   const ritmoOptions = [
     'Sinusal', 'Ectópico Atrial', 'Juncional', 
     'Fibrilação Atrial', 'Flutter Atrial', 'MP (Marcapasso)', 'Outro'
@@ -41,21 +39,81 @@ const Laudo = () => {
     'Infradesnivelamento', 'Supradesnivelamento', 'Outro'
   ];
 
-  // Função para buscar o PRIMEIRO ECG pendente do tipo selecionado
+  // Função para gerar o texto do laudo final com base nos outros campos
+  const generateLaudoFinal = (currentForm) => {
+    let finalContent = [];
+
+    // Ritmo
+    if (currentForm.ritmo) {
+      finalContent.push(`Ritmo: ${currentForm.ritmo}.`);
+    }
+    // FC
+    if (currentForm.fc) {
+      finalContent.push(`Frequência Cardíaca: ${currentForm.fc} bpm.`);
+    }
+    // PR
+    if (currentForm.pr) {
+      finalContent.push(`Intervalo PR: ${currentForm.pr} ms.`);
+    }
+    // QRS
+    if (currentForm.qrs) {
+      finalContent.push(`Duração QRS: ${currentForm.qrs} ms.`);
+    }
+    // Eixo
+    if (currentForm.eixo) {
+      finalContent.push(`Eixo elétrico: ${currentForm.eixo}.`);
+    }
+    // Bloqueios de Ramo
+    let bloqueios = [];
+    if (currentForm.brc) {
+      bloqueios.push('Bloqueio de Ramo Completo (BRC)');
+    }
+    if (currentForm.brd) {
+      bloqueios.push('Bloqueio de Ramo Direito (BRD)');
+    }
+    if (bloqueios.length > 0) {
+      finalContent.push(`Bloqueios de Ramo: ${bloqueios.join(' e ')}.`);
+    }
+    // Repolarização
+    if (currentForm.repolarizacao) {
+      finalContent.push(`Repolarização: ${currentForm.repolarizacao}.`);
+    }
+    // Outros Achados
+    if (currentForm.outrosAchados) {
+      finalContent.push(`Outros Achados: ${currentForm.outrosAchados}.`);
+    }
+
+    return finalContent.join('\n'); // Junta as linhas com quebras de linha
+  };
+
+  // Função auxiliar para atualizar o formulário e gerar o laudo final
+  const updateFormAndGenerateLaudo = (field, value) => {
+    setLaudoForm(prevForm => {
+      const updatedForm = { ...prevForm, [field]: value };
+      // Regenera o laudo final a cada alteração, exceto se a alteração for no próprio laudoFinal
+      if (field !== 'laudoFinal') {
+        updatedForm.laudoFinal = generateLaudoFinal(updatedForm);
+      }
+      return updatedForm;
+    });
+  };
+
   const fetchAndSelectFirstEcg = async (priorityType) => {
     setLoadingEcgs(true);
-    setSelectedEcg(null); // Limpa o ECG selecionado ao mudar o tipo
-    setLaudoForm({ // Reseta o formulário
+    setSelectedEcg(null);
+    setLaudoForm({ // Reseta o formulário completamente
       ritmo: '', fc: '', pr: '', qrs: '', eixo: '',
       brc: false, brd: false, repolarizacao: '',
       outrosAchados: '', laudoFinal: '',
     });
     try {
-      const ecgs = await getPendingEcgs(priorityType); // Busca por prioridade
+      const ecgs = await getPendingEcgs(priorityType);
       if (ecgs.length > 0) {
-        setSelectedEcg(ecgs[0]); // Seleciona o primeiro da lista
+        setSelectedEcg(ecgs[0]);
+        // Ao selecionar um ECG, também geramos o laudo final inicial (opcional, se houver dados padrão)
+        // Por enquanto, o laudo final será gerado conforme o médico preenche
       } else {
-        setSelectedEcg(null); // Nenhum ECG encontrado para este tipo
+        setSelectedEcg(null);
       }
     } catch (error) {
       Alert.alert('Erro', 'Não foi possível carregar os exames pendentes.');
@@ -65,14 +123,12 @@ const Laudo = () => {
     }
   };
 
-  // Efeito para buscar e selecionar ECG quando a prioridade muda
   useEffect(() => {
     if (user?.role === 'medico' && selectedPriorityType) {
       fetchAndSelectFirstEcg(selectedPriorityType);
     }
   }, [user, selectedPriorityType]);
 
-  // Função para submeter o laudo
   const submitLaudo = async () => {
     if (!selectedEcg) {
       Alert.alert('Erro', 'Nenhum ECG selecionado para laudar.');
@@ -85,7 +141,6 @@ const Laudo = () => {
 
     setIsSubmitting(true);
     try {
-      // Cria um objeto com os detalhes estruturados do laudo
       const structuredLaudationDetails = {
         ritmo: laudoForm.ritmo,
         fc: laudoForm.fc,
@@ -101,14 +156,13 @@ const Laudo = () => {
       await updateEcgLaudation(
         selectedEcg.$id,
         laudoForm.laudoFinal,
-        user.$id, // ID do médico logado
-        structuredLaudationDetails // Passa os detalhes estruturados
+        user.$id,
+        structuredLaudationDetails
       );
       
       Alert.alert('Sucesso', 'Laudo enviado com sucesso!');
-      setSelectedEcg(null); // Desseleciona o ECG
-      // Após laudar, busca o próximo ECG da mesma prioridade
-      fetchAndSelectFirstEcg(selectedPriorityType); 
+      setSelectedEcg(null);
+      fetchAndSelectFirstEcg(selectedPriorityType);
       setLaudoForm({ // Reseta o formulário
         ritmo: '', fc: '', pr: '', qrs: '', eixo: '',
         brc: false, brd: false, repolarizacao: '',
@@ -122,7 +176,6 @@ const Laudo = () => {
     }
   };
 
-  // Componente de seleção de rádio (opcional, para Ritmo e Repolarização)
   const RadioGroup = ({ label, options, selectedOption, onSelect }) => (
     <View className="mt-7">
       <Text className="text-base text-gray-100 font-pmedium mb-2">{label}</Text>
@@ -142,22 +195,16 @@ const Laudo = () => {
     </View>
   );
 
-  // Função para lidar com o botão "Voltar"
   const handleBack = () => {
     if (selectedEcg) {
-      // Se um ECG está selecionado, volta para a seleção de prioridade/lista
       setSelectedEcg(null);
     } else if (selectedPriorityType) {
-      // Se um tipo de prioridade está selecionado, volta para a tela de escolha de tipo
       setSelectedPriorityType(null);
     }
     else {
-      // Se não há ECG selecionado nem prioridade, navega para a aba 'home'
-      // Isso evita o erro GO_BACK não tratado em navegadores de abas
-      router.push('/home'); // <<< ALTERADO: Agora navega explicitamente para /home
+      router.push('/home');
     }
   };
-
 
   return (
     <SafeAreaView className="bg-primary h-full flex-1">
@@ -172,25 +219,25 @@ const Laudo = () => {
           Laudar Eletrocardiogramas
         </Text>
 
-        {!selectedPriorityType ? ( // Se nenhum tipo de prioridade foi selecionado
+        {!selectedPriorityType ? (
           <View className="flex-1 justify-center items-center h-80">
             <Text className="text-xl text-white font-pmedium mb-4">Escolha o tipo de laudo:</Text>
             <View className="flex-row space-x-4 mt-4">
               <CustomButton
                 title="Laudar Urgente"
                 handlePress={() => setSelectedPriorityType('Urgente')}
-                containerStyles="bg-red-600 flex-1" // Ajustado para ser metade da largura
+                containerStyles="bg-red-600 w-1/2"
               />
               <CustomButton
                 title="Laudar Eletivo"
                 handlePress={() => setSelectedPriorityType('Eletivo')}
-                containerStyles="bg-orange-500 flex-1" // Ajustado para ser metade da largura
+                containerStyles="bg-orange-500 w-1/2"
               />
             </View>
           </View>
-        ) : loadingEcgs ? ( // Se um tipo foi selecionado e está carregando
+        ) : loadingEcgs ? (
           <ActivityIndicator size="large" color="#FFA001" className="mt-10" />
-        ) : !selectedEcg ? ( // Se um tipo foi selecionado, mas nenhum ECG encontrado
+        ) : !selectedEcg ? (
           <View className="flex-1 justify-center items-center h-40">
             <Text className="text-gray-100 font-pmedium text-lg">
               Não há ECGs "{selectedPriorityType}" pendentes de laudo.
@@ -201,11 +248,10 @@ const Laudo = () => {
               containerStyles="mt-4 bg-gray-700"
             />
           </View>
-        ) : ( // Se um ECG foi selecionado (automaticamente)
+        ) : (
           <View className="mt-8 p-4 bg-black-100 rounded-xl border-2 border-black-200">
             <Text className="text-xl text-white font-psemibold mb-4">Laudar ECG de {selectedEcg.patientName}</Text>
             
-            {/* Exibir imagem e detalhes do ECG selecionado */}
             <Image
               source={{ uri: selectedEcg.imageUrl }}
               className="w-full h-64 rounded-lg mb-4"
@@ -225,14 +271,14 @@ const Laudo = () => {
               label="Ritmo"
               options={ritmoOptions}
               selectedOption={laudoForm.ritmo}
-              onSelect={(option) => setLaudoForm({ ...laudoForm, ritmo: option })}
+              onSelect={(option) => updateFormAndGenerateLaudo('ritmo', option)} // Usando a nova função
             />
 
             <FormField
               title="FC (bpm)"
               value={laudoForm.fc}
               placeholder="Frequência Cardíaca..."
-              handleChangeText={(e) => setLaudoForm({ ...laudoForm, fc: e })}
+              handleChangeText={(e) => updateFormAndGenerateLaudo('fc', e)} // Usando a nova função
               keyboardType="numeric"
               otherStyles="mt-7"
             />
@@ -240,7 +286,7 @@ const Laudo = () => {
               title="PR (ms)"
               value={laudoForm.pr}
               placeholder="Intervalo PR..."
-              handleChangeText={(e) => setLaudoForm({ ...laudoForm, pr: e })}
+              handleChangeText={(e) => updateFormAndGenerateLaudo('pr', e)} // Usando a nova função
               keyboardType="numeric"
               otherStyles="mt-7"
             />
@@ -248,7 +294,7 @@ const Laudo = () => {
               title="QRS (ms)"
               value={laudoForm.qrs}
               placeholder="Duração QRS..."
-              handleChangeText={(e) => setLaudoForm({ ...laudoForm, qrs: e })}
+              handleChangeText={(e) => updateFormAndGenerateLaudo('qrs', e)} // Usando a nova função
               keyboardType="numeric"
               otherStyles="mt-7"
             />
@@ -256,7 +302,7 @@ const Laudo = () => {
               title="Eixo"
               value={laudoForm.eixo}
               placeholder="Eixo elétrico (ex: 90°)..."
-              handleChangeText={(e) => setLaudoForm({ ...laudoForm, eixo: e })}
+              handleChangeText={(e) => updateFormAndGenerateLaudo('eixo', e)} // Usando a nova função
               otherStyles="mt-7"
             />
 
@@ -265,13 +311,13 @@ const Laudo = () => {
               <Text className="text-base text-gray-100 font-pmedium mb-2">Bloqueios de Ramo</Text>
               <View className="flex-row space-x-4">
                 <TouchableOpacity
-                  onPress={() => setLaudoForm({ ...laudoForm, brc: !laudoForm.brc })}
+                  onPress={() => updateFormAndGenerateLaudo('brc', !laudoForm.brc)} // Usando a nova função
                   className={`py-2 px-5 rounded-lg ${laudoForm.brc ? 'bg-blue-600' : 'bg-gray-800 border border-gray-700'}`}
                 >
                   <Text className="text-white font-pmedium">BRC</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  onPress={() => setLaudoForm({ ...laudoForm, brd: !laudoForm.brd })}
+                  onPress={() => updateFormAndGenerateLaudo('brd', !laudoForm.brd)} // Usando a nova função
                   className={`py-2 px-5 rounded-lg ${laudoForm.brd ? 'bg-blue-600' : 'bg-gray-800 border border-gray-700'}`}
                 >
                   <Text className="text-white font-pmedium">BRD</Text>
@@ -283,27 +329,27 @@ const Laudo = () => {
               label="Repolarização"
               options={repolarizacaoOptions}
               selectedOption={laudoForm.repolarizacao}
-              onSelect={(option) => setLaudoForm({ ...laudoForm, repolarizacao: option })}
+              onSelect={(option) => updateFormAndGenerateLaudo('repolarizacao', option)} // Usando a nova função
             />
 
             <FormField
               title="Outros Achados"
               value={laudoForm.outrosAchados}
               placeholder="Descreva outros achados não listados..."
-              handleChangeText={(e) => setLaudoForm({ ...laudoForm, outrosAchados: e })}
+              handleChangeText={(e) => updateFormAndGenerateLaudo('outrosAchados', e)} // Usando a nova função
               otherStyles="mt-7"
-              multiline={true} // Campo de texto de múltiplas linhas
-              numberOfLines={4} // Altura inicial do campo
+              multiline={true}
+              numberOfLines={4}
             />
 
             <FormField
               title="Laudo Final Completo"
               value={laudoForm.laudoFinal}
               placeholder="Escreva o laudo completo do ECG aqui..."
-              handleChangeText={(e) => setLaudoForm({ ...laudoForm, laudoFinal: e })}
+              handleChangeText={(e) => updateFormAndGenerateLaudo('laudoFinal', e)} // Permitir edição manual sem regenerar automaticamente
               otherStyles="mt-7"
-              multiline={true} // Campo de texto de múltiplas linhas
-              numberOfLines={10} // Altura inicial do campo
+              multiline={true}
+              numberOfLines={10}
             />
 
             <CustomButton

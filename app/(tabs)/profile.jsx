@@ -46,6 +46,9 @@ const Profile = () => {
     router.replace('/sign-in');
   };
 
+  // Calcula o número de ECGs que foram laudados
+  const laudedEcgsCount = ecgs.filter(ecg => ecg.status === 'lauded').length;
+
   // Mostrar carregamento enquanto o usuário ou os ECGs estão sendo carregados
   if (isGlobalLoading || !user || areEcgsLoading) {
     return (
@@ -90,15 +93,15 @@ const Profile = () => {
 
             <View className="mt-5 flex-row">
               <InfoBox
-                title={ecgs.length || 0} // Mostra a quantidade de ECGs
+                title={ecgs.length || 0} // Mostra a quantidade total de ECGs enviados
                 subtitle="ECGs Enviados"
                 containerStyles="mr-10"
                 titleStyles="text-xl"
               />
 
               <InfoBox
-                title="0" // Este é um valor fixo, pode ajustar ou remover
-                subtitle="Recebidos" // Pode mudar para algo como "Laudos Recebidos" ou remover
+                title={laudedEcgsCount} // AGORA EXIBE A QUANTIDADE DE LAUDOS RECEBIDOS
+                subtitle="Laudos Recebidos" // Texto mais claro para o enfermeiro
                 titleStyles="text-xl"
               />
             </View>

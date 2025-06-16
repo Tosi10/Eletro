@@ -37,7 +37,9 @@ const EcgCard = ({ ecg }) => {
     creator, 
     $createdAt, // Appwrite automaticamente adiciona esta propriedade
     hasPacemaker, // Campo de Marcapasso
-    priority      // Campo de Prioridade
+    priority,      // Campo de Prioridade
+    laudationContent, // Conteúdo do laudo
+    laudationDoctor // Objeto do médico laudador (populado por getUserPosts)
   } = ecg;
 
   // Usa $createdAt como a data a ser exibida
@@ -78,7 +80,7 @@ const EcgCard = ({ ecg }) => {
         <Text className="text-gray-100 font-pregular text-base">
           Prioridade: <Text className={`font-psemibold ${
             priority === 'Urgente' ? 'text-red-400' : 
-            priority === 'Eletivo' ? 'text-orange-400' : 'text-white'
+            priority === 'Eletivo' ? 'text-orange-400' : 'text-white' // Alterado 'Eminente' para 'Eletivo'
           }`}>
             {priority || 'N/A'}
           </Text>
@@ -99,8 +101,8 @@ const EcgCard = ({ ecg }) => {
             className="w-8 h-8 rounded-full mr-2"
             resizeMode="cover"
           />
-          <Text className="text-gray-100 font-pregular text-sm">
-            Enviado por: <Text className="text-white font-pmedium">{creator.username}</Text> {/* ENVOLVIDO EM TEXT */}
+          <Text className="text-gray-100 font-pregular text-base">
+            Enviado por: <Text className="text-white font-pmedium">{creator.username}</Text>
           </Text>
         </View>
       )}
@@ -108,23 +110,23 @@ const EcgCard = ({ ecg }) => {
       {/* Notas/Observações */}
       {notes && ( 
         <View className="mt-2">
-          <Text className="text-gray-100 font-pmedium text-sm">
+          <Text className="text-gray-100 font-pmedium text-base">
             Observações:
           </Text>
-          <Text className="text-gray-100 font-pregular text-sm">
+          <Text className="text-gray-100 font-pregular text-base">
             {notes}
           </Text>
         </View>
       )}
 
-      {/* Placeholder para Laudo (futuramente) */}
-      {ecg.status === 'lauded' && ecg.laudationContent && (
+      {/* Se o ECG foi laudado, exibe o conteúdo do laudo e o nome do médico */}
+      {status === 'lauded' && laudationContent && (
         <View className="mt-4 p-3 bg-blue-900/20 rounded-lg">
-          <Text className="text-blue-300 font-psemibold text-sm">Laudo:</Text>
-          <Text className="text-blue-200 font-pregular text-sm">{ecg.laudationContent}</Text>
-          {ecg.laudationId && (
-              <Text className="text-blue-400 font-pregular text-xs mt-1">
-                Laudado por: <Text className="text-white font-pmedium">{ecg.laudationId}</Text> {/* ENVOLVIDO EM TEXT */}
+          <Text className="text-blue-300 font-psemibold text-base">Laudo:</Text>
+          <Text className="text-blue-200 font-pregular text-base">{laudationContent}</Text>
+          {laudationDoctor && ( // Verifica se o objeto laudationDoctor foi populado
+              <Text className="text-blue-400 font-pregular text-sm mt-1">
+                Laudado por: <Text className="text-white font-pmedium">{laudationDoctor.username}</Text>
               </Text>
           )}
         </View>
