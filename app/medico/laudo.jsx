@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, Image, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { getPendingEcgs, updateEcgLaudation } from '../../lib/appwrite';
+import { getPendingEcgs, updateEcgLaudation, getUserProfile as getEcgById } from '../../lib/appwrite'; // Renomeado getUserProfile para getEcgById
 import { useGlobalContext } from '../../context/GlobalProvider';
 import FormField from '../../components/FormField';
 import CustomButton from '../../components/CustomButton';
@@ -27,7 +27,7 @@ const Laudo = () => {
     brd: false,
     repolarizacao: '',
     outrosAchados: '',
-    laudoFinal: '', // Este será preenchido automaticamente
+    laudoFinal: '',
   });
 
   const ritmoOptions = [
@@ -39,31 +39,24 @@ const Laudo = () => {
     'Infradesnivelamento', 'Supradesnivelamento', 'Outro'
   ];
 
-  // Função para gerar o texto do laudo final com base nos outros campos
   const generateLaudoFinal = (currentForm) => {
     let finalContent = [];
 
-    // Ritmo
     if (currentForm.ritmo) {
       finalContent.push(`Ritmo: ${currentForm.ritmo}.`);
     }
-    // FC
     if (currentForm.fc) {
       finalContent.push(`Frequência Cardíaca: ${currentForm.fc} bpm.`);
     }
-    // PR
     if (currentForm.pr) {
       finalContent.push(`Intervalo PR: ${currentForm.pr} ms.`);
     }
-    // QRS
     if (currentForm.qrs) {
       finalContent.push(`Duração QRS: ${currentForm.qrs} ms.`);
     }
-    // Eixo
     if (currentForm.eixo) {
       finalContent.push(`Eixo elétrico: ${currentForm.eixo}.`);
     }
-    // Bloqueios de Ramo
     let bloqueios = [];
     if (currentForm.brc) {
       bloqueios.push('Bloqueio de Ramo Completo (BRC)');
@@ -74,23 +67,19 @@ const Laudo = () => {
     if (bloqueios.length > 0) {
       finalContent.push(`Bloqueios de Ramo: ${bloqueios.join(' e ')}.`);
     }
-    // Repolarização
     if (currentForm.repolarizacao) {
       finalContent.push(`Repolarização: ${currentForm.repolarizacao}.`);
     }
-    // Outros Achados
     if (currentForm.outrosAchados) {
       finalContent.push(`Outros Achados: ${currentForm.outrosAchados}.`);
     }
 
-    return finalContent.join('\n'); // Junta as linhas com quebras de linha
+    return finalContent.join('\n');
   };
 
-  // Função auxiliar para atualizar o formulário e gerar o laudo final
   const updateFormAndGenerateLaudo = (field, value) => {
     setLaudoForm(prevForm => {
       const updatedForm = { ...prevForm, [field]: value };
-      // Regenera o laudo final a cada alteração, exceto se a alteração for no próprio laudoFinal
       if (field !== 'laudoFinal') {
         updatedForm.laudoFinal = generateLaudoFinal(updatedForm);
       }
@@ -101,7 +90,7 @@ const Laudo = () => {
   const fetchAndSelectFirstEcg = async (priorityType) => {
     setLoadingEcgs(true);
     setSelectedEcg(null);
-    setLaudoForm({ // Reseta o formulário completamente
+    setLaudoForm({
       ritmo: '', fc: '', pr: '', qrs: '', eixo: '',
       brc: false, brd: false, repolarizacao: '',
       outrosAchados: '', laudoFinal: '',
@@ -110,8 +99,6 @@ const Laudo = () => {
       const ecgs = await getPendingEcgs(priorityType);
       if (ecgs.length > 0) {
         setSelectedEcg(ecgs[0]);
-        // Ao selecionar um ECG, também geramos o laudo final inicial (opcional, se houver dados padrão)
-        // Por enquanto, o laudo final será gerado conforme o médico preenche
       } else {
         setSelectedEcg(null);
       }
@@ -163,7 +150,7 @@ const Laudo = () => {
       Alert.alert('Sucesso', 'Laudo enviado com sucesso!');
       setSelectedEcg(null);
       fetchAndSelectFirstEcg(selectedPriorityType);
-      setLaudoForm({ // Reseta o formulário
+      setLaudoForm({
         ritmo: '', fc: '', pr: '', qrs: '', eixo: '',
         brc: false, brd: false, repolarizacao: '',
         outrosAchados: '', laudoFinal: '',
@@ -203,6 +190,14 @@ const Laudo = () => {
     }
     else {
       router.push('/home');
+    }
+  };
+
+  const handleOpenChat = () => {
+    if (selectedEcg) {
+      router.push(`/chat/${selectedEcg.$id}`); // Navega para a tela de chat
+    } else {
+      Alert.alert('Erro', 'Selecione um ECG para abrir o chat.');
     }
   };
 
@@ -271,14 +266,14 @@ const Laudo = () => {
               label="Ritmo"
               options={ritmoOptions}
               selectedOption={laudoForm.ritmo}
-              onSelect={(option) => updateFormAndGenerateLaudo('ritmo', option)} // Usando a nova função
+              onSelect={(option) => updateFormAndGenerateLaudo('ritmo', option)}
             />
 
             <FormField
               title="FC (bpm)"
               value={laudoForm.fc}
               placeholder="Frequência Cardíaca..."
-              handleChangeText={(e) => updateFormAndGenerateLaudo('fc', e)} // Usando a nova função
+              handleChangeText={(e) => updateFormAndGenerateLaudo('fc', e)}
               keyboardType="numeric"
               otherStyles="mt-7"
             />
@@ -286,7 +281,7 @@ const Laudo = () => {
               title="PR (ms)"
               value={laudoForm.pr}
               placeholder="Intervalo PR..."
-              handleChangeText={(e) => updateFormAndGenerateLaudo('pr', e)} // Usando a nova função
+              handleChangeText={(e) => updateFormAndGenerateLaudo('pr', e)}
               keyboardType="numeric"
               otherStyles="mt-7"
             />
@@ -294,7 +289,7 @@ const Laudo = () => {
               title="QRS (ms)"
               value={laudoForm.qrs}
               placeholder="Duração QRS..."
-              handleChangeText={(e) => updateFormAndGenerateLaudo('qrs', e)} // Usando a nova função
+              handleChangeText={(e) => updateFormAndGenerateLaudo('qrs', e)}
               keyboardType="numeric"
               otherStyles="mt-7"
             />
@@ -302,7 +297,7 @@ const Laudo = () => {
               title="Eixo"
               value={laudoForm.eixo}
               placeholder="Eixo elétrico (ex: 90°)..."
-              handleChangeText={(e) => updateFormAndGenerateLaudo('eixo', e)} // Usando a nova função
+              handleChangeText={(e) => updateFormAndGenerateLaudo('eixo', e)}
               otherStyles="mt-7"
             />
 
@@ -311,13 +306,13 @@ const Laudo = () => {
               <Text className="text-base text-gray-100 font-pmedium mb-2">Bloqueios de Ramo</Text>
               <View className="flex-row space-x-4">
                 <TouchableOpacity
-                  onPress={() => updateFormAndGenerateLaudo('brc', !laudoForm.brc)} // Usando a nova função
+                  onPress={() => updateFormAndGenerateLaudo('brc', !laudoForm.brc)}
                   className={`py-2 px-5 rounded-lg ${laudoForm.brc ? 'bg-blue-600' : 'bg-gray-800 border border-gray-700'}`}
                 >
                   <Text className="text-white font-pmedium">BRC</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  onPress={() => updateFormAndGenerateLaudo('brd', !laudoForm.brd)} // Usando a nova função
+                  onPress={() => updateFormAndGenerateLaudo('brd', !laudoForm.brd)}
                   className={`py-2 px-5 rounded-lg ${laudoForm.brd ? 'bg-blue-600' : 'bg-gray-800 border border-gray-700'}`}
                 >
                   <Text className="text-white font-pmedium">BRD</Text>
@@ -329,14 +324,14 @@ const Laudo = () => {
               label="Repolarização"
               options={repolarizacaoOptions}
               selectedOption={laudoForm.repolarizacao}
-              onSelect={(option) => updateFormAndGenerateLaudo('repolarizacao', option)} // Usando a nova função
+              onSelect={(option) => updateFormAndGenerateLaudo('repolarizacao', option)}
             />
 
             <FormField
               title="Outros Achados"
               value={laudoForm.outrosAchados}
               placeholder="Descreva outros achados não listados..."
-              handleChangeText={(e) => updateFormAndGenerateLaudo('outrosAchados', e)} // Usando a nova função
+              handleChangeText={(e) => updateFormAndGenerateLaudo('outrosAchados', e)}
               otherStyles="mt-7"
               multiline={true}
               numberOfLines={4}
@@ -346,7 +341,7 @@ const Laudo = () => {
               title="Laudo Final Completo"
               value={laudoForm.laudoFinal}
               placeholder="Escreva o laudo completo do ECG aqui..."
-              handleChangeText={(e) => updateFormAndGenerateLaudo('laudoFinal', e)} // Permitir edição manual sem regenerar automaticamente
+              handleChangeText={(e) => updateFormAndGenerateLaudo('laudoFinal', e)}
               otherStyles="mt-7"
               multiline={true}
               numberOfLines={10}
@@ -355,8 +350,15 @@ const Laudo = () => {
             <CustomButton
               title="Submeter Laudo"
               handlePress={submitLaudo}
-              containerStyles="mt-7 mb-10"
+              containerStyles="mt-7"
               isLoading={isSubmitting}
+            />
+
+            {/* Botão de Chat na Tela de Laudo */}
+            <CustomButton
+              title="Abrir Chat sobre este ECG"
+              handlePress={handleOpenChat}
+              containerStyles="mt-4 mb-10 bg-green-600" // Cor verde para o botão de chat
             />
 
           </View>

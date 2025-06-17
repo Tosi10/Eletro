@@ -1,6 +1,7 @@
 import React from 'react';
-import { View, Text, Image } from 'react-native';
-import { images } from '../constants'; // Para fallback de avatar, se necessário
+import { View, Text, Image, TouchableOpacity } from 'react-native'; // Adicionado TouchableOpacity
+import { images, icons } from '../constants'; // Para fallback de avatar e ícone de chat
+import { useRouter } from 'expo-router'; // Importar useRouter para navegação
 
 // Função para formatar a data
 const formatDisplayDate = (dateString) => {
@@ -22,6 +23,8 @@ const formatDisplayDate = (dateString) => {
 };
 
 const EcgCard = ({ ecg }) => {
+  const router = useRouter(); // Inicializa o router
+
   if (!ecg) {
     return null;
   }
@@ -44,6 +47,10 @@ const EcgCard = ({ ecg }) => {
 
   // Usa $createdAt como a data a ser exibida
   const dateToDisplay = $createdAt;
+
+  const handleOpenChat = () => {
+    router.push(`/chat/${ecg.$id}`); // Navega para a tela de chat com o ID do ECG
+  };
 
   return (
     <View className="bg-black-100 rounded-xl mb-4 p-4 border-2 border-black-200">
@@ -80,7 +87,7 @@ const EcgCard = ({ ecg }) => {
         <Text className="text-gray-100 font-pregular text-base">
           Prioridade: <Text className={`font-psemibold ${
             priority === 'Urgente' ? 'text-red-400' : 
-            priority === 'Eletivo' ? 'text-orange-400' : 'text-white' // Alterado 'Eminente' para 'Eletivo'
+            priority === 'Eletivo' ? 'text-orange-400' : 'text-white'
           }`}>
             {priority || 'N/A'}
           </Text>
@@ -124,13 +131,22 @@ const EcgCard = ({ ecg }) => {
         <View className="mt-4 p-3 bg-blue-900/20 rounded-lg">
           <Text className="text-blue-300 font-psemibold text-base">Laudo:</Text>
           <Text className="text-blue-200 font-pregular text-base">{laudationContent}</Text>
-          {laudationDoctor && ( // Verifica se o objeto laudationDoctor foi populado
+          {laudationDoctor && (
               <Text className="text-blue-400 font-pregular text-sm mt-1">
                 Laudado por: <Text className="text-white font-pmedium">{laudationDoctor.username}</Text>
               </Text>
           )}
         </View>
       )}
+
+      {/* Botão de Chat */}
+      <TouchableOpacity
+        onPress={handleOpenChat}
+        className="mt-4 bg-secondary-100 p-3 rounded-lg flex-row items-center justify-center"
+      >
+        <Image source={icons.chat} className="w-5 h-5 mr-2" tintColor="#FFF" />
+        <Text className="text-white font-pmedium text-base">Abrir Chat</Text>
+      </TouchableOpacity>
     </View>
   );
 };

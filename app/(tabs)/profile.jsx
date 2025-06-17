@@ -1,41 +1,73 @@
-import { Text, View, FlatList, Image, RefreshControl, Alert, TouchableOpacity } from 'react-native';
+import { Text, View, FlatList, Image, RefreshControl, Alert, TouchableOpacity, ActivityIndicator } from 'react-native'; // <--- GARANTIDO QUE ActivityIndicator ESTÁ AQUI
 import React, { useEffect, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { icons, images } from '../../constants';
 import EmptyState from '../../components/EmptyState';
-import { getUserPosts, signOut } from '../../lib/appwrite';
+// Importa ambas as funções de busca de ECGs
+import { getUserPosts, signOut, getPendingEcgs, getLaudedEcgsByDoctorId } from '../../lib/appwrite'; 
 import useAppwrite from '../../lib/useAppwrite';
 import { useGlobalContext } from '../../context/GlobalProvider';
 import InfoBox from '../../components/InfoBox';
 import { router } from 'expo-router';
-// import LoadingSpinner from '../../components/LoadingSpinner'; // Comentei, pois você não tem, mas pode adicionar
 
-// Importar o novo componente EcgCard
 import EcgCard from '../../components/EcgCard';
 
 const Profile = () => {
   const { user, setUser, setIsLogged, isLoading: isGlobalLoading } = useGlobalContext();
 
-  // A função getUserPosts deve estar retornando os ECGs com o objeto 'creator' populado
+  // Condicionalmente, buscamos os ECGs com base no role do usuário
+  let fetchFunction;
+  let fetchDependencies = [user?.$id]; // Dependência padrão para ambos
+
+  if (user?.role === 'enfermeiro') {
+    fetchFunction = () => user?.$id ? getUserPosts(user.$id) : Promise.resolve([]);
+  } else if (user?.role === 'medico') {
+    fetchFunction = () => user?.$id ? getLaudedEcgsByDoctorId(user.$id) : Promise.resolve([]);
+  } else {
+    // Se o role não for reconhecido, não busca nada
+    fetchFunction = () => Promise.resolve([]);
+  }
+
   const { data: ecgs, isLoading: areEcgsLoading, refetch } = useAppwrite(
-    () => user?.$id ? getUserPosts(user.$id) : Promise.resolve([]),
-    [user?.$id]
+    fetchFunction,
+    fetchDependencies
   );
+
+  // NOVO ESTADO: Para armazenar ECGs pendentes (apenas para médicos)
+  const [pendingEcgsCount, setPendingEcgsCount] = useState(0);
+  const [fetchingPending, setFetchingPending] = useState(false);
+
+  useEffect(() => {
+    const fetchPendingForDoctor = async () => {
+      if (user?.role === 'medico') {
+        setFetchingPending(true);
+        try {
+          // Buscamos os ECGs urgentes e eletivos separadamente para contagem
+          const urgentEcgs = await getPendingEcgs('Urgente');
+          const electiveEcgs = await getPendingEcgs('Eletivo');
+          setPendingEcgsCount(urgentEcgs.length + electiveEcgs.length);
+        } catch (error) {
+          console.error("Erro ao buscar ECGs pendentes para o médico:", error);
+          setPendingEcgsCount(0);
+        } finally {
+          setFetchingPending(false);
+        }
+      }
+    };
+    fetchPendingForDoctor();
+  }, [user]);
+
 
   const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    // console.log("User no Profile:", user);
-    // console.log("Is Global Loading:", isGlobalLoading);
-    // if (user) {
-    //   console.log("Username do usuário:", user.username);
-    //   console.log("Avatar do usuário:", user.avatar);
-    // }
-  }, [user, isGlobalLoading]);
-
   const onRefresh = async () => {
     setRefreshing(true);
-    await refetch();
+    await refetch(); // Refetch dos ECGs do perfil
+    if (user?.role === 'medico') {
+      const urgentEcgs = await getPendingEcgs('Urgente');
+      const electiveEcgs = await getPendingEcgs('Eletivo');
+      setPendingEcgsCount(urgentEcgs.length + electiveEcgs.length);
+    }
     setRefreshing(false);
   };
 
@@ -46,14 +78,14 @@ const Profile = () => {
     router.replace('/sign-in');
   };
 
-  // Calcula o número de ECGs que foram laudados
+  // Calcular a contagem de ECGs laudados pelo enfermeiro
   const laudedEcgsCount = ecgs.filter(ecg => ecg.status === 'lauded').length;
 
   // Mostrar carregamento enquanto o usuário ou os ECGs estão sendo carregados
-  if (isGlobalLoading || !user || areEcgsLoading) {
+  if (isGlobalLoading || !user || areEcgsLoading || (user?.role === 'medico' && fetchingPending)) {
     return (
       <SafeAreaView className="bg-primary h-full justify-center items-center">
-        {/* {isLoading && <LoadingSpinner />} */}
+        <ActivityIndicator size="large" color="#FFA001" />
         <Text className="text-white text-lg mt-4">Carregando perfil e histórico de ECGs...</Text>
       </SafeAreaView>
     );
@@ -62,10 +94,10 @@ const Profile = () => {
   return (
     <SafeAreaView className="bg-primary h-full">
       <FlatList
-        data={ecgs} // Agora passamos os ECGs
+        data={ecgs}
         keyExtractor={(item) => item.$id}
         renderItem={({ item }) => (
-          <EcgCard ecg={item} /> // Renderiza o EcgCard para cada item
+          <EcgCard ecg={item} />
         )}
         ListHeaderComponent={() => (
           <View className="w-full justify-center items-center mt-6 mb-12 px-4">
@@ -92,25 +124,44 @@ const Profile = () => {
             />
 
             <View className="mt-5 flex-row">
-              <InfoBox
-                title={ecgs.length || 0} // Mostra a quantidade total de ECGs enviados
-                subtitle="ECGs Enviados"
-                containerStyles="mr-10"
-                titleStyles="text-xl"
-              />
-
-              <InfoBox
-                title={laudedEcgsCount} // AGORA EXIBE A QUANTIDADE DE LAUDOS RECEBIDOS
-                subtitle="Laudos Recebidos" // Texto mais claro para o enfermeiro
-                titleStyles="text-xl"
-              />
+              {user?.role === 'enfermeiro' ? (
+                <>
+                  <InfoBox
+                    title={ecgs.length || 0}
+                    subtitle="ECGs Enviados"
+                    containerStyles="mr-10"
+                    titleStyles="text-xl"
+                  />
+                  <InfoBox
+                    title={laudedEcgsCount}
+                    subtitle="Laudos Recebidos"
+                    titleStyles="text-xl"
+                  />
+                </>
+              ) : ( // Se for médico
+                <>
+                  <InfoBox
+                    title={ecgs.length || 0} // ecgs para médico são os LAUDADOS
+                    subtitle="ECGs Laudados"
+                    containerStyles="mr-10"
+                    titleStyles="text-xl"
+                  />
+                  <InfoBox
+                    title={pendingEcgsCount} // Mostra a contagem de pendentes
+                    subtitle="ECGs Pendentes"
+                    titleStyles="text-xl"
+                  />
+                </>
+              )}
             </View>
           </View>
         )}
         ListEmptyComponent={() => (
           <EmptyState
-            title="Nenhum ECG encontrado"
-            subtitle="Você ainda não enviou nenhum eletrocardiograma."
+            title={`Nenhum ECG ${user?.role === 'medico' ? 'Laudado' : 'Enviado'} `}
+            subtitle={user?.role === 'medico' ? 
+                      "Você ainda não laudou nenhum eletrocardiograma." : 
+                      "Você ainda não enviou nenhum eletrocardiograma."}
           />
         )}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
