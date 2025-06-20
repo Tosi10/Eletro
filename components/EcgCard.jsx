@@ -1,147 +1,169 @@
 import React from 'react';
-import { View, Text, Image, TouchableOpacity } from 'react-native';
-import { icons } from '../constants'; // Assumindo que icons está aqui
-import { router } from 'expo-router'; // Para navegação
-import { useGlobalContext } from '../context/GlobalProvider';
+import { View, Text, Image, TouchableOpacity, Alert } from 'react-native';
+import { images, icons } from '../constants'; // Para a imagem de perfil e ícone de chat
+import { useRouter } from 'expo-router';
 
-const EcgCard = ({ ecg }) => {
-  const { user } = useGlobalContext(); // Para verificar o usuário logado
-
-  // Conversão do Firestore Timestamp para Date legível
-  const createdAtDate = ecg.createdAt && ecg.createdAt.toDate ? ecg.createdAt.toDate() : new Date();
-  const formattedDate = createdAtDate.toLocaleDateString('pt-BR', {
+// Função para formatar o Timestamp do Firebase para data e hora local
+// Esta função é compatível com o tipo Timestamp do Firebase Firestore
+const formatFirebaseTimestamp = (timestamp) => {
+  // Verifica se o timestamp existe e se possui o método toDate() (indicando um Timestamp do Firebase)
+  if (!timestamp || typeof timestamp.toDate !== 'function') return 'N/A';
+  const date = timestamp.toDate(); // Converte o Timestamp do Firebase para objeto Date
+  const formattedDate = date.toLocaleDateString('pt-BR', {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
   });
-  const formattedTime = createdAtDate.toLocaleTimeString('pt-BR', {
+  const formattedTime = date.toLocaleTimeString('pt-BR', {
     hour: '2-digit',
     minute: '2-digit',
   });
+  return `${formattedDate} às ${formattedTime}`;
+};
 
-  const displayStatus = (status) => {
-    switch (status) {
-      case 'pending':
-        return 'Pendente';
-      case 'lauded':
-        return 'Laudado';
-      default:
-        return 'Desconhecido';
-    }
-  };
+const EcgCard = ({ ecg }) => {
+  const router = useRouter();
 
-  const handleChatPress = () => {
-    if (ecg.id) {
-      router.push(`/chat/${ecg.id}`);
+  if (!ecg) {
+    return null;
+  }
+
+  // Desestruturando as propriedades do objeto ecg
+  // Agora, esperando a estrutura de dados vinda do Firebase/Firestore
+  const { 
+    patientName, 
+    age, 
+    sex, 
+    notes, 
+    imageUrl, 
+    status, 
+    creator, // Objeto 'creator' para o uploader (enfermeiro)
+    createdAt, // <<< MUDANÇA: 'createdAt' é o nome do campo para Timestamps no Firebase
+    hasPacemaker, 
+    priority,      
+    laudationContent, 
+    laudationDoctor // Objeto 'laudationDoctor' para o médico laudador
+  } = ecg;
+
+  // O ID do ECG para navegação para o chat será 'ecg.id' no Firebase/Firestore
+  const ecgIdForChat = ecg.id; // <<< MUDANÇA: Usa 'id' (do Firebase Doc ID) em vez de '$id' (do Appwrite)
+
+  // Função para abrir a tela de chat para este ECG
+  const handleOpenChat = () => {
+    if (ecgIdForChat) {
+      router.push(`/chat/${ecgIdForChat}`); // Navega para a tela de chat com o ID do ECG
     } else {
+      // Alerta se o ID do ECG não estiver disponível para o chat
+      // (Isso deve ser raro se o ECG foi carregado corretamente)
       Alert.alert('Erro', 'ID do ECG não disponível para abrir o chat.');
     }
   };
 
-  // Determinar qual avatar mostrar (criador ou laudador)
-  const displayAvatar = ecg.status === 'lauded' && ecg.laudationDoctor 
-                        ? ecg.laudationDoctor.avatar 
-                        : (ecg.creator ? ecg.creator.avatar : 'https://ui-avatars.com/api/?name=U'); // Fallback para "U" se não houver criador
-
-  const displayName = ecg.status === 'lauded' && ecg.laudationDoctor
-                      ? ecg.laudationDoctor.username
-                      : (ecg.creator ? ecg.creator.username : 'Desconhecido');
-
+  // Lógica para determinar qual nome exibir no cabeçalho do cartão
+  let displayCreatorName = creator?.username || 'Enfermeiro(a) Desconhecido';
+  if (status === 'lauded' && laudationDoctor?.username) {
+    // Se o ECG foi laudado, mostra o nome do médico laudador
+    displayCreatorName = laudationDoctor.username;
+  }
 
   return (
-    <View className="flex-col items-center px-4 mb-14">
-      <View className="flex-row gap-3 items-start">
-        <View className="justify-center items-center flex-row flex-1">
-          <View className="w-[46px] h-[46px] rounded-lg border border-secondary justify-center items-center p-0.5">
-            <Image
-              source={{ uri: displayAvatar }}
-              className="w-full h-full rounded-lg"
-              resizeMode="cover"
-            />
-          </View>
+    <View className="bg-black-100 rounded-xl mb-4 p-4 border-2 border-black-200">
+      {/* Seção do Cabeçalho: Avatar e Nome do Criador/Laudador */}
+      <View className="flex-row gap-3 items-start mb-4">
+        {/* Container do Avatar */}
+        <View className="w-10 h-10 rounded-full border border-secondary justify-center items-center p-0.5">
+          {/* IMAGEM DO AVATAR: AGORA SEMPRE USA A IMAGEM DE PERFIL LOCAL */}
+          <Image
+            source={images.profile} // <<< MUDANÇA: Usa diretamente o asset local 'images.profile'
+            className="w-full h-full rounded-full"
+            resizeMode="cover"
+            // Não precisamos mais de onError ou lógica de fallback complexa aqui
+          />
+        </View>
 
-          <View className="flex-1 justify-center ml-3 gap-y-1">
-            <Text
-              className="font-psemibold text-sm text-white"
-              numberOfLines={1}
-            >
-              {displayName}
-            </Text>
-            <Text
-              className="font-pregular text-xs text-gray-100"
-              numberOfLines={1}
-            >
-              {ecg.patientName} - ID: {ecg.id?.substring(0, 8) || 'N/A'}
-            </Text>
-          </View>
-
-          <View className="pt-2">
-            <Image
-              source={icons.menu}
-              className="w-5 h-5"
-              resizeMode="contain"
-            />
-          </View>
+        {/* Informações do Nome e Paciente/ID */}
+        <View className="flex-1 justify-center">
+          <Text className="text-white font-psemibold text-sm" numberOfLines={1}>
+            {displayCreatorName}
+          </Text>
+          <Text className="text-gray-100 font-pregular text-xs" numberOfLines={1}>
+            Paciente: {patientName} - ID: {ecg.id?.substring(0, 8) || 'N/A'} {/* Usa ecg.id */}
+          </Text>
         </View>
       </View>
 
-      <View className="w-full h-60 rounded-xl mt-3 relative justify-center items-center">
+      {/* Imagem do ECG */}
+      <View className="w-full h-48 rounded-lg overflow-hidden mb-4">
         <Image
-          source={{ uri: ecg.imageUrl }}
-          className="w-full h-full rounded-xl"
+          source={{ uri: imageUrl }}
+          className="w-full h-full"
           resizeMode="cover"
         />
       </View>
 
-      <View className="flex-row justify-between items-center w-full mt-3">
-        <Text className="text-gray-100 text-sm font-pregular">
-          Idade: {ecg.age}
+      {/* Detalhes do ECG (Idade, Sexo, Marcapasso, Prioridade, Status, Data de Envio) */}
+      <View className="mb-2">
+        <Text className="text-gray-100 font-pregular text-base">
+          Idade: <Text className="text-white font-psemibold">{age || 'N/A'}</Text>
         </Text>
-        <Text className="text-gray-100 text-sm font-pregular">
-          Sexo: {ecg.sex}
+        <Text className="text-gray-100 font-pregular text-base">
+          Sexo: <Text className="text-white font-psemibold">{sex || 'N/A'}</Text>
         </Text>
-        <Text className="text-gray-100 text-sm font-pregular">
-          Marcapasso: {ecg.hasPacemaker}
+        <Text className="text-gray-100 font-pregular text-base">
+          Marcapasso: <Text className="text-white font-psemibold">{hasPacemaker || 'N/A'}</Text>
         </Text>
+        <Text className="text-gray-100 font-pregular text-base">
+          Prioridade: <Text className={`font-psemibold ${
+            priority === 'Urgente' ? 'text-red-400' : 
+            priority === 'Eletivo' ? 'text-orange-400' : 'text-white'
+          }`}>
+            {priority || 'N/A'}
+          </Text>
+        </Text>
+        <Text className="text-gray-100 font-pregular text-base">
+          Status: <Text className={`${status === 'pending' ? 'text-yellow-400' : 'text-green-400'} font-psemibold`}>
+            {status === 'pending' ? 'Pendente' : 'Laudado'}
+          </Text>
+        </Text>
+        {createdAt && ( // Exibe a data de criação se disponível
+          <Text className="text-gray-100 font-pregular text-sm mt-1">
+            Enviado em: {formatFirebaseTimestamp(createdAt)}
+          </Text>
+        )}
       </View>
-      <View className="flex-row justify-between items-center w-full mt-2">
-        <Text className="text-gray-100 text-sm font-pregular">
-          Status: <Text className={`font-psemibold ${ecg.status === 'pending' ? 'text-yellow-400' : 'text-green-500'}`}>{displayStatus(ecg.status)}</Text>
-        </Text>
-        <Text className="text-gray-100 text-sm font-pregular">
-          Prioridade: <Text className={`font-psemibold ${ecg.priority === 'Urgente' ? 'text-red-500' : 'text-orange-400'}`}>{ecg.priority}</Text>
-        </Text>
-      </View>
-      <Text className="text-gray-100 text-sm font-pregular w-full mt-2">
-        Enviado em: {formattedDate} às {formattedTime}
-      </Text>
-      {ecg.notes && (
-        <Text className="text-gray-100 text-sm font-pregular w-full mt-2" numberOfLines={2}>
-          Observações: {ecg.notes}
-        </Text>
+
+      {/* Seção de Notas/Observações Adicionais */}
+      {notes && ( // Renderiza este bloco apenas se houver notas
+        <View className="mt-2">
+          <Text className="text-gray-100 font-pmedium text-base">
+            Observações:
+          </Text>
+          <Text className="text-gray-100 font-pregular text-base">
+            {notes}
+          </Text>
+        </View>
       )}
 
-      {ecg.status === 'lauded' && ecg.laudationContent && (
-        <View className="w-full mt-4 p-3 bg-gray-800 rounded-lg">
-          <Text className="text-white text-base font-psemibold mb-2">Laudo Final:</Text>
-          <Text className="text-gray-200 text-sm" numberOfLines={3}>
-            {ecg.laudationContent}
-          </Text>
-          {ecg.laudationDoctor && (
-            <Text className="text-gray-400 text-xs mt-2">
-              Laudado por: {ecg.laudationDoctor.username} em {ecg.laudedAt?.toDate ? ecg.laudedAt.toDate().toLocaleDateString('pt-BR') : 'N/A'}
-            </Text>
+      {/* Seção do Laudo (se o status for 'lauded' e houver conteúdo de laudo) */}
+      {status === 'lauded' && laudationContent && (
+        <View className="mt-4 p-3 bg-blue-900/20 rounded-lg">
+          <Text className="text-blue-300 font-psemibold text-base">Laudo:</Text>
+          <Text className="text-blue-200 font-pregular text-base">{laudationContent}</Text>
+          {laudationDoctor && ( // Exibe o nome do médico que laudou se disponível
+              <Text className="text-blue-400 font-pregular text-sm mt-1">
+                Laudado por: <Text className="text-white font-pmedium">{laudationDoctor.username}</Text>
+              </Text>
           )}
         </View>
       )}
 
-      {/* Botão Abrir Chat */}
+      {/* Botão para Abrir Chat */}
       <TouchableOpacity
-        onPress={handleChatPress}
-        activeOpacity={0.7}
-        className="w-full bg-blue-600 rounded-full min-h-[50px] justify-center items-center mt-5"
+        onPress={handleOpenChat}
+        className="mt-4 bg-secondary-100 p-3 rounded-lg flex-row items-center justify-center"
       >
-        <Text className="text-white font-psemibold text-base">Abrir Chat</Text>
+        <Image source={icons.chat} className="w-5 h-5 mr-2" tintColor="#FFF" />
+        <Text className="text-white font-pmedium text-base">Abrir Chat</Text>
       </TouchableOpacity>
     </View>
   );

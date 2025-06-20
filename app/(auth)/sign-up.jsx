@@ -1,4 +1,4 @@
-import { ScrollView, Text, View, ImageBackground, Alert, StyleSheet } from 'react-native' // Adicionado ImageBackground e StyleSheet
+import { ScrollView, Text, View,Image, ImageBackground, Alert, StyleSheet } from 'react-native' // Adicionado ImageBackground e StyleSheet
 import React, { useState } from 'react'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Link, router } from 'expo-router'

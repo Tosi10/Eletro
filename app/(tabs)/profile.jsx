@@ -1,11 +1,9 @@
 import { Text, View, FlatList, Image, RefreshControl, Alert, TouchableOpacity, ActivityIndicator } from 'react-native';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { icons, images } from '../../constants';
 import EmptyState from '../../components/EmptyState';
-// MUDANÇA AQUI: Importa do Firebase
 import { getUserPosts, signOut, getPendingEcgs, getLaudedEcgsByDoctorId } from '../../lib/firebase'; 
-// MUDANÇA AQUI: Usa o novo hook renomeado
 import useFirebaseData from '../../lib/useFirebaseData'; 
 import { useGlobalContext } from '../../context/GlobalProvider';
 import InfoBox from '../../components/InfoBox';
@@ -16,71 +14,78 @@ import EcgCard from '../../components/EcgCard';
 const Profile = () => {
   const { user, setUser, setIsLogged, isLoading: isGlobalLoading } = useGlobalContext();
 
-  // Condicionalmente, buscamos os ECGs com base no role do usuário
-  let fetchFunction;
-  let fetchDependencies = [user?.uid]; // Dependência padrão para ambos (user.uid do Firebase)
-
-  if (user?.role === 'enfermeiro') {
-    fetchFunction = () => user?.uid ? getUserPosts(user.uid) : Promise.resolve([]);
-  } else if (user?.role === 'medico') {
-    fetchFunction = () => user?.uid ? getLaudedEcgsByDoctorId(user.uid) : Promise.resolve([]);
-  } else {
-    fetchFunction = () => Promise.resolve([]);
-  }
+  const fetchEcgsFunction = useCallback(() => {
+    if (!user?.uid) { 
+      console.log('Profile: user.uid não disponível para buscar ECGs.');
+      return Promise.resolve([]);
+    }
+    
+    if (user?.role === 'enfermeiro') {
+      console.log('Profile: Buscando ECGs enviados pelo enfermeiro:', user.uid);
+      return getUserPosts(user.uid);
+    } else if (user?.role === 'medico') {
+      console.log('Profile: Buscando ECGs laudados pelo médico:', user.uid);
+      return getLaudedEcgsByDoctorId(user.uid);
+    }
+    console.warn('Profile: Papel do usuário não reconhecido, retornando ECGs vazios.');
+    return Promise.resolve([]);
+  }, [user?.uid, user?.role]);
 
   const { data: ecgs, isLoading: areEcgsLoading, refetch } = useFirebaseData(
-    fetchFunction,
-    fetchDependencies
+    fetchEcgsFunction,
+    [user?.uid, user?.role] 
   );
 
   const [pendingEcgsCount, setPendingEcgsCount] = useState(0);
   const [fetchingPending, setFetchingPending] = useState(false);
 
-  useEffect(() => {
-    // DEBUG DO AVATAR: user.avatar é: (agora no useEffect, não no JSX)
-    console.log('DEBUG DO AVATAR (dentro do useEffect): user.avatar é:', user?.avatar);
-
-    const fetchPendingForDoctor = async () => {
-      if (user?.role === 'medico' && user?.uid) { // Verifica user.uid antes de buscar
-        setFetchingPending(true);
-        try {
-          const allPendingEcgs = await getPendingEcgs(); // Busca todos os pendentes, sem filtro de prioridade
-          setPendingEcgsCount(allPendingEcgs.length);
-        } catch (error) {
-          console.error("Erro ao buscar ECGs pendentes para o médico:", error);
-          setPendingEcgsCount(0);
-        } finally {
-          setFetchingPending(false);
-        }
+  const fetchPendingForDoctor = useCallback(async () => {
+    if (user?.role === 'medico' && user?.uid) {
+      setFetchingPending(true);
+      try {
+        console.log('Profile: Buscando ECGs pendentes para o médico...');
+        const allPendingEcgs = await getPendingEcgs();
+        setPendingEcgsCount(allPendingEcgs.length);
+        console.log('Profile: ECGs pendentes encontrados:', allPendingEcgs.length);
+      } catch (error) {
+        console.error("Erro ao buscar ECGs pendentes para o médico:", error);
+        setPendingEcgsCount(0);
+      } finally {
+        setFetchingPending(false);
       }
-    };
-    fetchPendingForDoctor();
-  }, [user]);
+    } else {
+      setPendingEcgsCount(0);
+    }
+  }, [user?.role, user?.uid]);
 
+  useEffect(() => {
+    // REMOVIDO: console.log('DEBUG DO AVATAR (dentro do useEffect): user.avatar é:', user?.avatar);
+    fetchPendingForDoctor(); 
+  }, [user, fetchPendingForDoctor]);
 
   const [refreshing, setRefreshing] = useState(false);
 
   const onRefresh = async () => {
     setRefreshing(true);
     await refetch(); 
-    if (user?.role === 'medico' && user?.uid) {
-      const allPendingEcgs = await getPendingEcgs();
-      setPendingEcgsCount(allPendingEcgs.length);
-    }
+    await fetchPendingForDoctor(); 
     setRefreshing(false);
   };
 
   const logout = async () => {
-    await signOut(); // Usa a função signOut do Firebase
-    setUser(null);
-    setIsLogged(false);
-    router.replace('/sign-in');
+    try {
+      await signOut(); 
+      setUser(null);
+      setIsLogged(false);
+      router.replace('/sign-in');
+    } catch (error) {
+      Alert.alert('Erro ao Sair', error.message);
+      console.error('Erro durante o logout:', error);
+    }
   };
 
-  // Calcular a contagem de ECGs laudados pelo enfermeiro
   const laudedEcgsCount = ecgs.filter(ecg => ecg.status === 'lauded').length;
 
-  // Mostrar carregamento enquanto o usuário ou os ECGs estão sendo carregados
   if (isGlobalLoading || !user || areEcgsLoading || (user?.role === 'medico' && fetchingPending)) {
     return (
       <SafeAreaView className="bg-primary h-full justify-center items-center">
@@ -94,7 +99,7 @@ const Profile = () => {
     <SafeAreaView className="bg-primary h-full">
       <FlatList
         data={ecgs}
-        keyExtractor={(item) => item.id} // MUDANÇA AQUI: Usa 'item.id' do Firestore
+        keyExtractor={(item) => item.id} 
         renderItem={({ item }) => (
           <EcgCard ecg={item} />
         )}
@@ -108,12 +113,11 @@ const Profile = () => {
                 resizeMode='contain' className="w-6 h-6" />
             </TouchableOpacity>
 
-            <View className="w-16 h-16 border border-secondary rounded-lg justify-center items-center">
-              {/* console.log removido daqui para evitar o erro de texto */}
+            <View className="w-24 h-24 border border-secondary rounded-full justify-center items-center p-1">
               <Image
-                source={{ uri: user.avatar }}
-                className="w-[90%] h-[90%] rounded-lg"
-                resizeMode='cover'
+                source={images.profile} // SEMPRE USA A IMAGEM LOCAL
+                className="w-full h-full rounded-full" 
+                resizeMode='cover' 
               />
             </View>
 
