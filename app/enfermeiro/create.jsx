@@ -1,27 +1,20 @@
-import { Platform, Alert, Image, ScrollView, Text, TouchableOpacity, View, ImageBackground } from 'react-native';
-import React, { useState, useRef } from 'react';
+import { Alert, Image, ScrollView, Text, TouchableOpacity, View, ImageBackground, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import FormField from '../../components/FormField';
-import { icons, images } from '../../constants';
-import CustomButton from '../../components/CustomButton';
-import { createEcg } from '../../lib/appwrite';
+// Caminhos de importação ajustados para o nível correto
+import FormField from '../../components/FormField'; 
+import CustomButton from '../../components/CustomButton'; 
+import { icons, images } from '../../constants'; 
+// MUDANÇA AQUI: Importa do Firebase
+import { createEcg } from '../../lib/firebase'; 
 import { useGlobalContext } from '../../context/GlobalProvider';
 import { useRouter } from 'expo-router';
-import * as ImagePicker from 'expo-image-picker';
+import * as ImagePicker from 'expo-image-picker'; 
 import * as Linking from 'expo-linking';
-
-const showAlert = (title, message) => {
-  if (Platform.OS === 'web') {
-    window.alert(`${title}\n\n${message}`);
-  } else {
-    Alert.alert(title, message);
-  }
-};
 
 const Create = () => {
   const { user } = useGlobalContext();
   const router = useRouter();
-  const fileInputRef = useRef(null);
 
   const [uploading, setUploading] = useState(false);
 
@@ -29,79 +22,62 @@ const Create = () => {
     patientName: '',
     age: '',
     sex: '',
-    hasPacemaker: '',
-    priority: '',
+    hasPacemaker: '', 
+    priority: '',     
     ecgFile: null,
     notes: '',
   });
 
   const openPicker = async () => {
-    if (Platform.OS === 'web') {
-      fileInputRef.current.click();
-      return;
-    }
-
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    
     if (status !== 'granted') {
-      showAlert(
+      Alert.alert(
         'Permissão Necessária',
-        'Precisamos de acesso à sua galeria para que você possa selecionar imagens. Por favor, conceda a permissão nas configurações do aplicativo.'
+        'Precisamos de acesso à sua galeria para que você possa selecionar imagens. Por favor, conceda a permissão nas configurações do aplicativo.',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Abrir Configurações', onPress: () => Linking.openSettings() },
+        ]
       );
-      return;
+      return; 
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 1,
-      aspect: [4, 3],
+      mediaTypes: ImagePicker.MediaTypeOptions.Images, 
+      quality: 1, 
+      aspect: [4, 3], 
     });
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
       setForm((prev) => ({
         ...prev,
-        ecgFile: result.assets[0],
+        ecgFile: result.assets[0], 
       }));
     } else {
-      if (!result.canceled) {
-        showAlert('Atenção', 'Nenhuma imagem selecionada.');
+      if (!result.canceled) { 
+        Alert.alert('Atenção', 'Nenhuma imagem selecionada.');
       }
     }
   };
 
-  // Handler para web
-  const handleFileChange = (event) => {
-    const file = event.target.files[0];
-    if (file) {
-      const uri = URL.createObjectURL(file);
-      setForm((prev) => ({
-        ...prev,
-        ecgFile: { uri, name: file.name, type: file.type, file },
-      }));
-    }
-  };
-
   const submit = async () => {
-    const isEmpty = (value) => !value || String(value).trim() === '';
-
-    if (!user) {
-      showAlert('Erro', 'Usuário não autenticado. Faça login novamente.');
-      return;
+    if (!user || !user.uid) { // Verifica user.uid do Firebase
+      return Alert.alert('Erro', 'Usuário não autenticado. Faça login novamente.');
     }
-
     if (
-      isEmpty(form.patientName) ||
-      isEmpty(form.age) ||
-      isEmpty(form.sex) ||
-      isEmpty(form.hasPacemaker) ||
-      isEmpty(form.priority) ||
+      !form.patientName ||
+      !form.age ||
+      !form.sex ||
+      !form.hasPacemaker || 
+      !form.priority ||     
       !form.ecgFile ||
-      isEmpty(form.notes)
+      !form.notes
     ) {
-      showAlert('Campos Obrigatórios', 'Por favor, preencha todos os campos e selecione a imagem do ECG.');
-      return;
+      return Alert.alert('Campos Obrigatórios', 'Por favor, preencha todos os campos e selecione a imagem do ECG.');
     }
 
-    setUploading(true);
+    setUploading(true); 
 
     try {
       await createEcg({
@@ -110,13 +86,13 @@ const Create = () => {
         sex: form.sex,
         hasPacemaker: form.hasPacemaker,
         priority: form.priority,
-        ecgFile: Platform.OS === 'web' ? form.ecgFile.file : form.ecgFile,
+        ecgFile: form.ecgFile,
         notes: form.notes,
-        uploaderId: user.$id,
+        uploaderId: user.uid, // MUDANÇA AQUI: Usa user.uid para o Firebase
       });
 
-      showAlert('Sucesso', 'ECG enviado para laudo com sucesso!');
-      router.replace('/home');
+      Alert.alert('Sucesso', 'ECG enviado para laudo com sucesso!');
+      router.replace('/home'); // Redireciona para a home, onde as abas estarão visíveis novamente
       setForm({
         patientName: '',
         age: '',
@@ -127,57 +103,32 @@ const Create = () => {
         notes: '',
       });
     } catch (error) {
-      showAlert('Erro no Upload', error.message);
+      Alert.alert('Erro no Upload', error.message);
       console.error('Erro detalhado no upload do ECG:', error);
     } finally {
-      setUploading(false);
+      setUploading(false); 
     }
   };
 
   return (
     <SafeAreaView className="bg-primary h-full flex-1">
       <ImageBackground
-        source={images.cardio2}
+        source={images.cardio2} 
         resizeMode="cover"
         className="flex-1 w-full h-full"
       >
-        {/* Botão de voltar fixo no topo */}
-        <View
-          style={{
-            position: 'absolute',
-            top: Platform.OS === 'web' ? 24 : 0,
-            left: 0,
-            width: '100%',
-            zIndex: 50,
-            padding: 16,
-            backgroundColor: 'rgba(0,0,0,0.15)',
-          }}
-        >
-          <TouchableOpacity
-            onPress={() => router.replace('/home')}
-            style={{
-              alignSelf: 'flex-start',
-              paddingVertical: 8,
-              paddingHorizontal: 12,
-              borderRadius: 8,
-              backgroundColor: 'rgba(255,255,255,0.15)',
-            }}
-          >
-            <Text style={{ color: '#FFA001', fontWeight: 'bold', fontSize: 16 }}>← Voltar para abas</Text>
+        <View 
+          pointerEvents="none" 
+          className="absolute inset-0 bg-black/20 z-10"
+        />
+
+        <ScrollView className="px-4 my-6" contentContainerStyle={{ flexGrow: 1, zIndex: 2 }}>
+          {/* Botão de Voltar para a Home */}
+          <TouchableOpacity onPress={() => router.replace('/home')} className="flex-row items-center mb-6">
+            <Image source={icons.leftArrow} className="w-6 h-6 mr-2" resizeMode="contain" tintColor="#FFFFFF" />
+            <Text className="text-white text-base font-pmedium">Voltar para Home</Text>
           </TouchableOpacity>
-        </View>
 
-        {/* Overlay para escurecer a imagem */}
-        <View pointerEvents="none" className="absolute inset-0 bg-black/20 z-10" />
-
-        <ScrollView
-          className="px-4 my-6"
-          contentContainerStyle={{
-            flexGrow: 1,
-            zIndex: 2,
-            paddingTop: 56, // espaço para o botão de voltar
-          }}
-        >
           <Text className="text-2xl text-white font-psemibold">
             Upload de Eletrocardiograma
           </Text>
@@ -194,7 +145,7 @@ const Create = () => {
             title="Idade"
             value={form.age}
             placeholder="Digite a idade do paciente..."
-            keyboardType="numeric"
+            keyboardType="numeric" 
             handleChangeText={(e) => setForm({ ...form, age: e })}
             otherStyles="mt-7"
           />
@@ -218,56 +169,45 @@ const Create = () => {
           </View>
 
           <View className="mt-7">
-            <Text className="text-base text-gray-100 font-pmedium mb-2">Possui Marcapasso?</Text>
-            <View className="flex-row space-x-4">
-              <TouchableOpacity
-                onPress={() => setForm({ ...form, hasPacemaker: 'Sim' })}
-                className={`py-2 px-5 rounded-lg ${form.hasPacemaker === 'Sim' ? 'bg-blue-600' : 'bg-gray-800 border border-gray-700'}`}
-              >
-                <Text className="text-white font-pmedium">Sim</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => setForm({ ...form, hasPacemaker: 'Não' })}
-                className={`py-2 px-5 rounded-lg ${form.hasPacemaker === 'Não' ? 'bg-blue-600' : 'bg-gray-800 border border-gray-700'}`}
-              >
-                <Text className="text-white font-pmedium">Não</Text>
-              </TouchableOpacity>
-            </View>
+              <Text className="text-base text-gray-100 font-pmedium mb-2">Possui Marcapasso?</Text>
+              <View className="flex-row space-x-4">
+                  <TouchableOpacity
+                      onPress={() => setForm({ ...form, hasPacemaker: 'Sim' })}
+                      className={`py-2 px-5 rounded-lg ${form.hasPacemaker === 'Sim' ? 'bg-blue-600' : 'bg-gray-800 border border-gray-700'}`}
+                  >
+                      <Text className="text-white font-pmedium">Sim</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                      onPress={() => setForm({ ...form, hasPacemaker: 'Não' })}
+                      className={`py-2 px-5 rounded-lg ${form.hasPacemaker === 'Não' ? 'bg-blue-600' : 'bg-gray-800 border border-gray-700'}`}
+                  >
+                      <Text className="text-white font-pmedium">Não</Text>
+                  </TouchableOpacity>
+              </View>
           </View>
 
           <View className="mt-7">
-            <Text className="text-base text-gray-100 font-pmedium mb-2">Prioridade</Text>
-            <View className="flex-row space-x-4">
-              <TouchableOpacity
-                onPress={() => setForm({ ...form, priority: 'Urgente' })}
-                className={`py-2 px-5 rounded-lg ${form.priority === 'Urgente' ? 'bg-red-600' : 'bg-gray-800 border border-gray-700'}`}
-              >
-                <Text className="text-white font-pmedium">Urgente</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => setForm({ ...form, priority: 'Eletivo' })}
-                className={`py-2 px-5 rounded-lg ${form.priority === 'Eletivo' ? 'bg-orange-500' : 'bg-gray-800 border border-gray-700'}`}
-              >
-                <Text className="text-white font-pmedium">Eletivo</Text>
-              </TouchableOpacity>
-            </View>
+              <Text className="text-base text-gray-100 font-pmedium mb-2">Prioridade</Text>
+              <View className="flex-row space-x-4">
+                  <TouchableOpacity
+                      onPress={() => setForm({ ...form, priority: 'Urgente' })}
+                      className={`py-2 px-5 rounded-lg ${form.priority === 'Urgente' ? 'bg-red-600' : 'bg-gray-800 border border-gray-700'}`}
+                  >
+                      <Text className="text-white font-pmedium">Urgente</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                      onPress={() => setForm({ ...form, priority: 'Eletivo' })} 
+                      className={`py-2 px-5 rounded-lg ${form.priority === 'Eletivo' ? 'bg-orange-500' : 'bg-gray-800 border border-gray-700'}`}
+                  >
+                      <Text className="text-white font-pmedium">Eletivo</Text> 
+                  </TouchableOpacity>
+              </View>
           </View>
 
           <View className="mt-7 space-y-2">
             <Text className="text-base text-gray-100 font-pmedium">
               Imagem do Eletrocardiograma
             </Text>
-
-            {/* Input de arquivo para web (fica invisível) */}
-            {Platform.OS === 'web' && (
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                style={{ display: 'none' }}
-                onChange={handleFileChange}
-              />
-            )}
 
             <TouchableOpacity onPress={openPicker}>
               {form.ecgFile ? (
@@ -288,7 +228,7 @@ const Create = () => {
           </View>
 
           <FormField
-            title="Caso Clínico"
+            title="Observações Adicionais"
             value={form.notes}
             placeholder="Descreva quaisquer observações importantes sobre o exame..."
             handleChangeText={(e) => setForm({ ...form, notes: e })}

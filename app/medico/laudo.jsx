@@ -1,20 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, Image, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { getPendingEcgs, updateEcgLaudation, getUserProfile as getEcgById } from '../../lib/appwrite'; // Renomeado getUserProfile para getEcgById
+// MUDANÇA AQUI: Importa do Firebase
+import { getPendingEcgs, updateEcgLaudation, getEcgById } from '../../lib/firebase'; 
 import { useGlobalContext } from '../../context/GlobalProvider';
-import FormField from '../../components/FormField';
-import CustomButton from '../../components/CustomButton';
-import EcgCard from '../../components/EcgCard';
-import { useRouter } from 'expo-router';
-import { icons } from '../../constants';
+import FormField from '../../components/FormField'; 
+import CustomButton from '../../components/CustomButton'; 
+import EcgCard from '../../components/EcgCard'; 
+import { useRouter } from 'expo-router'; 
+import { icons } from '../../constants'; 
 
 const Laudo = () => {
   const { user } = useGlobalContext();
-  const router = useRouter();
-  const [selectedPriorityType, setSelectedPriorityType] = useState(null);
-  const [selectedEcg, setSelectedEcg] = useState(null);
-  const [loadingEcgs, setLoadingEcgs] = useState(false);
+  const router = useRouter(); 
+  const [selectedPriorityType, setSelectedPriorityType] = useState(null); 
+  const [selectedEcg, setSelectedEcg] = useState(null); 
+  const [loadingEcgs, setLoadingEcgs] = useState(false); 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [laudoForm, setLaudoForm] = useState({
@@ -23,11 +24,11 @@ const Laudo = () => {
     pr: '',
     qrs: '',
     eixo: '',
-    brc: false,
-    brd: false,
+    brc: false, 
+    brd: false, 
     repolarizacao: '',
-    outrosAchados: '',
-    laudoFinal: '',
+    outrosAchados: '', 
+    laudoFinal: '', 
   });
 
   const ritmoOptions = [
@@ -74,7 +75,7 @@ const Laudo = () => {
       finalContent.push(`Outros Achados: ${currentForm.outrosAchados}.`);
     }
 
-    return finalContent.join('\n');
+    return finalContent.join('\n'); 
   };
 
   const updateFormAndGenerateLaudo = (field, value) => {
@@ -89,18 +90,19 @@ const Laudo = () => {
 
   const fetchAndSelectFirstEcg = async (priorityType) => {
     setLoadingEcgs(true);
-    setSelectedEcg(null);
-    setLaudoForm({
+    setSelectedEcg(null); 
+    setLaudoForm({ 
       ritmo: '', fc: '', pr: '', qrs: '', eixo: '',
       brc: false, brd: false, repolarizacao: '',
       outrosAchados: '', laudoFinal: '',
     });
     try {
-      const ecgs = await getPendingEcgs(priorityType);
+      // MUDANÇA AQUI: getPendingEcgs agora filtra por prioridade diretamente
+      const ecgs = await getPendingEcgs(priorityType); 
       if (ecgs.length > 0) {
-        setSelectedEcg(ecgs[0]);
+        setSelectedEcg(ecgs[0]); 
       } else {
-        setSelectedEcg(null);
+        setSelectedEcg(null); 
       }
     } catch (error) {
       Alert.alert('Erro', 'Não foi possível carregar os exames pendentes.');
@@ -125,6 +127,10 @@ const Laudo = () => {
       Alert.alert('Campos Obrigatórios', 'Por favor, preencha o campo de Laudo Final.');
       return;
     }
+    if (!user || !user.uid) { // Verifica user.uid
+      Alert.alert('Erro', 'Usuário não autenticado. Faça login novamente.');
+      return;
+    }
 
     setIsSubmitting(true);
     try {
@@ -141,16 +147,16 @@ const Laudo = () => {
       };
 
       await updateEcgLaudation(
-        selectedEcg.$id,
+        selectedEcg.id, // MUDANÇA AQUI: Usa selectedEcg.id para o Firebase
         laudoForm.laudoFinal,
-        user.$id,
-        structuredLaudationDetails
+        user.uid, // MUDANÇA AQUI: Usa user.uid para o Firebase
+        structuredLaudationDetails 
       );
       
       Alert.alert('Sucesso', 'Laudo enviado com sucesso!');
-      setSelectedEcg(null);
-      fetchAndSelectFirstEcg(selectedPriorityType);
-      setLaudoForm({
+      setSelectedEcg(null); 
+      fetchAndSelectFirstEcg(selectedPriorityType); 
+      setLaudoForm({ 
         ritmo: '', fc: '', pr: '', qrs: '', eixo: '',
         brc: false, brd: false, repolarizacao: '',
         outrosAchados: '', laudoFinal: '',
@@ -194,8 +200,8 @@ const Laudo = () => {
   };
 
   const handleOpenChat = () => {
-    if (selectedEcg) {
-      router.push(`/chat/${selectedEcg.$id}`); // Navega para a tela de chat
+    if (selectedEcg && selectedEcg.id) { // MUDANÇA AQUI: Usa selectedEcg.id
+      router.push(`/chat/${selectedEcg.id}`); 
     } else {
       Alert.alert('Erro', 'Selecione um ECG para abrir o chat.');
     }
@@ -214,25 +220,25 @@ const Laudo = () => {
           Laudar Eletrocardiogramas
         </Text>
 
-        {!selectedPriorityType ? (
+        {!selectedPriorityType ? ( 
           <View className="flex-1 justify-center items-center h-80">
             <Text className="text-xl text-white font-pmedium mb-4">Escolha o tipo de laudo:</Text>
             <View className="flex-row space-x-4 mt-4">
               <CustomButton
                 title="Laudar Urgente"
                 handlePress={() => setSelectedPriorityType('Urgente')}
-                containerStyles="bg-red-600 w-1/2"
+                containerStyles="bg-red-600 w-1/2" 
               />
               <CustomButton
                 title="Laudar Eletivo"
                 handlePress={() => setSelectedPriorityType('Eletivo')}
-                containerStyles="bg-orange-500 w-1/2"
+                containerStyles="bg-orange-500 w-1/2" 
               />
             </View>
           </View>
-        ) : loadingEcgs ? (
+        ) : loadingEcgs ? ( 
           <ActivityIndicator size="large" color="#FFA001" className="mt-10" />
-        ) : !selectedEcg ? (
+        ) : !selectedEcg ? ( 
           <View className="flex-1 justify-center items-center h-40">
             <Text className="text-gray-100 font-pmedium text-lg">
               Não há ECGs "{selectedPriorityType}" pendentes de laudo.
@@ -243,7 +249,7 @@ const Laudo = () => {
               containerStyles="mt-4 bg-gray-700"
             />
           </View>
-        ) : (
+        ) : ( 
           <View className="mt-8 p-4 bg-black-100 rounded-xl border-2 border-black-200">
             <Text className="text-xl text-white font-psemibold mb-4">Laudar ECG de {selectedEcg.patientName}</Text>
             
@@ -331,10 +337,10 @@ const Laudo = () => {
               title="Outros Achados"
               value={laudoForm.outrosAchados}
               placeholder="Descreva outros achados não listados..."
-              handleChangeText={(e) => updateFormAndGenerateLaudo('outrosAchados', e)}
+              handleChangeText={(e) => updateFormAndGenerateLaulo('outrosAchados', e)}
               otherStyles="mt-7"
-              multiline={true}
-              numberOfLines={4}
+              multiline={true} 
+              numberOfLines={4} 
             />
 
             <FormField
@@ -343,8 +349,8 @@ const Laudo = () => {
               placeholder="Escreva o laudo completo do ECG aqui..."
               handleChangeText={(e) => updateFormAndGenerateLaudo('laudoFinal', e)}
               otherStyles="mt-7"
-              multiline={true}
-              numberOfLines={10}
+              multiline={true} 
+              numberOfLines={10} 
             />
 
             <CustomButton
@@ -354,11 +360,10 @@ const Laudo = () => {
               isLoading={isSubmitting}
             />
 
-            {/* Botão de Chat na Tela de Laudo */}
             <CustomButton
               title="Abrir Chat sobre este ECG"
               handlePress={handleOpenChat}
-              containerStyles="mt-4 mb-10 bg-green-600" // Cor verde para o botão de chat
+              containerStyles="mt-4 mb-10 bg-green-600" 
             />
 
           </View>

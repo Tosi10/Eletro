@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, Alert, Image, FlatList, KeyboardAvoidingView, Platform, StyleSheet } from 'react-native'; // Adicionado StyleSheet
+import { View, Text, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, Alert, Image, FlatList, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { getEcgMessages, sendEcgMessage, subscribeToEcgMessages, getEcgById, config, databases } from '../../lib/appwrite';
+// MUDANÇA AQUI: Importa as funções do novo lib/firebase.js
+import { getEcgMessages, sendEcgMessage, subscribeToEcgMessages, getEcgById } from '../../lib/firebase'; 
 import { useGlobalContext } from '../../context/GlobalProvider';
 import { icons, images } from '../../constants';
 
@@ -17,11 +18,11 @@ const ChatScreen = () => {
   const flatListRef = useRef(null);
 
   useEffect(() => {
-    if (!ecgId || !user) {
+    if (!ecgId || !user || !user.uid) { // Verifica user.uid
       if (router.canGoBack()) {
         router.back();
       } else {
-        router.replace('/home');
+        router.replace('/home'); 
       }
       return;
     }
@@ -44,12 +45,21 @@ const ChatScreen = () => {
 
     fetchInitialData();
 
+    // Configurar listener em tempo real para novas mensagens
+    // subscribeToEcgMessages já adiciona a nova mensagem e popula o sender
     const unsubscribe = subscribeToEcgMessages(ecgId, (newMsg) => {
       setMessages(prevMessages => {
-        if (prevMessages.some(msg => msg.$id === newMsg.$id)) {
+        // Verifica se a mensagem já existe (pelo ID do Firestore) para evitar duplicatas
+        if (prevMessages.some(msg => msg.id === newMsg.id)) { // MUDANÇA AQUI: usa msg.id
           return prevMessages;
         }
-        return [...prevMessages, newMsg].sort((a, b) => new Date(a.$createdAt) - new Date(b.$createdAt));
+        // Adiciona a nova mensagem e reordena por data de criação (createdAt no Firebase)
+        // Note: createdAt do Firebase é um Timestamp, precisamos compará-lo.
+        return [...prevMessages, newMsg].sort((a, b) => {
+          const dateA = a.createdAt && a.createdAt.toDate ? a.createdAt.toDate().getTime() : new Date(a.$createdAt).getTime();
+          const dateB = b.createdAt && b.createdAt.toDate ? b.createdAt.toDate().getTime() : new Date(b.$createdAt).getTime();
+          return dateA - dateB;
+        });
       });
     });
 
@@ -64,12 +74,13 @@ const ChatScreen = () => {
     }
   }, [messages]);
 
+
   const handleSendMessage = async () => {
-    if (!newMessage.trim() || !user || !ecgId) return;
+    if (!newMessage.trim() || !user || !user.uid || !ecgId) return; // Verifica user.uid
 
     try {
-      await sendEcgMessage(ecgId, user.$id, newMessage);
-      setNewMessage('');
+      await sendEcgMessage(ecgId, user.uid, newMessage); // MUDANÇA AQUI: Usa user.uid
+      setNewMessage(''); 
     } catch (error) {
       Alert.alert('Erro ao Enviar', 'Não foi possível enviar a mensagem.');
       console.error('Erro ao enviar mensagem:', error);
@@ -77,15 +88,21 @@ const ChatScreen = () => {
   };
 
   const renderMessage = ({ item }) => {
-    const isMyMessage = item.senderId === user.$id;
+    const isMyMessage = item.senderId === user.uid; // MUDANÇA AQUI: Usa user.uid
     const senderName = item.sender?.username || 'Usuário Desconhecido';
-    const senderAvatar = item.sender?.avatar || images.profile;
+    const senderAvatar = item.sender?.avatar || images.profile; 
+
+    // Formata o timestamp do Firebase (se existir)
+    const messageTime = item.createdAt && item.createdAt.toDate ? 
+                        new Date(item.createdAt.toDate()).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) :
+                        (item.$createdAt ? new Date(item.$createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '');
+
 
     return (
       <View
         className={`flex-row mb-4 ${isMyMessage ? 'justify-end' : 'justify-start'}`}
       >
-        {!isMyMessage && (
+        {!isMyMessage && ( 
           <Image
             source={{ uri: senderAvatar }}
             className="w-8 h-8 rounded-full mr-2"
@@ -100,12 +117,12 @@ const ChatScreen = () => {
           {!isMyMessage && <Text className="text-white font-psemibold text-xs mb-1">{senderName}</Text>}
           <Text className="text-white">{item.message}</Text>
           <Text className={`text-xs mt-1 ${isMyMessage ? 'text-blue-200' : 'text-gray-400'} self-end`}>
-            {new Date(item.$createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+            {messageTime}
           </Text>
         </View>
-        {isMyMessage && (
+        {isMyMessage && ( 
           <Image
-            source={{ uri: senderAvatar }}
+            source={{ uri: senderAvatar }} 
             className="w-8 h-8 rounded-full ml-2"
             resizeMode="cover"
           />
@@ -128,7 +145,7 @@ const ChatScreen = () => {
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 60 : 0}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 60 : 0} 
       >
         {/* Cabeçalho do Chat */}
         <View className="bg-black-100 p-4 flex-row items-center justify-between border-b border-gray-700">
@@ -136,17 +153,16 @@ const ChatScreen = () => {
             <Image source={icons.leftArrow} className="w-6 h-6" tintColor="#FFF" />
           </TouchableOpacity>
           <Text className="text-white text-xl font-psemibold flex-1 text-center">
-            <Text>Chat ECG: </Text>{/* Garante que "Chat ECG: " está em um Text */}
-            <Text>{ecgDetails?.patientName || 'Carregando...'}</Text>
+            Chat ECG: <Text>{ecgDetails?.patientName || 'Carregando...'}</Text>
           </Text>
-          <View className="w-6 h-6" />
+          <View className="w-6 h-6" /> 
         </View>
 
         {/* Lista de Mensagens */}
         <FlatList
           ref={flatListRef}
           data={messages}
-          keyExtractor={(item) => item.$id}
+          keyExtractor={(item) => item.id} // MUDANÇA AQUI: Usa item.id
           renderItem={renderMessage}
           contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, flexGrow: 1 }}
           className="flex-1"

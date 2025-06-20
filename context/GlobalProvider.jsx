@@ -1,5 +1,10 @@
+// context/GlobalProvider.jsx
+
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { getCurrentUser, getUserProfile } from "../lib/appwrite";
+// Importa auth, db, doc, getCurrentUser, ensureUserProfile do novo lib/firebase.js
+import { auth, db, doc, getCurrentUser, ensureUserProfile } from "../lib/firebase"; 
+import { onAuthStateChanged, getAuth } from "firebase/auth"; // getAuth adicionado para garantir instância de auth
+
 
 const GlobalContext = createContext();
 export const useGlobalContext = () => useContext(GlobalContext);
@@ -10,51 +15,61 @@ const GlobalProvider = ({ children }) => {
   const [loading, setLoading] = useState(true); // Começa como true
 
   // Função para encapsular a lógica de busca do usuário
-  // Agora pode ser chamada de fora para re-buscar o usuário
+  // Agora pode ser chamada de fora para re-buscar o usuário e garantir o perfil
   const fetchUser = async () => {
-    console.log('GlobalProvider: Iniciando verificação de usuário...');
-    setLoading(true); // Garante que loading é true no início da busca
+    console.log('GlobalProvider: Iniciando verificação de usuário Firebase...');
+    setLoading(true); 
     let fetchedUser = null; 
 
     try {
-      const currentUserAppwrite = await getCurrentUser();
+      // getCurrentUser do nosso lib/firebase já usa onAuthStateChanged e busca o perfil do Firestore.
+      fetchedUser = await getCurrentUser(); // Esta função já lida com a persistência e busca o perfil
 
-      if (currentUserAppwrite) {
-        const userProfileDocument = await getUserProfile(currentUserAppwrite.$id);
-
-        if (userProfileDocument) {
-          fetchedUser = userProfileDocument; 
-          setIsLogged(true);
-          console.log('GlobalProvider: Usuário autenticado e perfil carregado. Detalhes do perfil:', JSON.stringify(userProfileDocument, null, 2));
-          console.log('GlobalProvider: Role do usuário:', userProfileDocument.role);
-        } else {
-          console.warn('GlobalProvider: Conta Appwrite encontrada, mas documento de perfil não na coleção de usuários.');
-          setIsLogged(false);
-        }
+      if (fetchedUser) {
+        setIsLogged(true);
+        console.log('GlobalProvider: Usuário autenticado e perfil carregado. Detalhes do perfil:', JSON.stringify(fetchedUser, null, 2));
       } else {
-        console.log('GlobalProvider: Nenhuma sessão ativa. Usuário não autenticado.');
         setIsLogged(false);
+        console.log('GlobalProvider: Nenhuma sessão ativa no Firebase. Usuário não autenticado.');
       }
     } catch (error) {
-      if (
-        error?.message?.includes('missing scope(account)') ||
-        error?.message?.includes('User (role: guests) missing scope (account)')
-      ) {
-        console.log('GlobalProvider: Usuário não autenticado (guest).');
-      } else {
-        console.error('GlobalProvider: Erro inesperado no fetchUser:', error);
-      }
+      console.error('GlobalProvider: Erro inesperado no fetchUser Firebase:', error);
       setIsLogged(false); 
     } finally {
       setUser(fetchedUser); 
       setLoading(false); 
-      console.log('GlobalProvider: Verificação de usuário finalizada.');
+      console.log('GlobalProvider: Verificação de usuário Firebase finalizada.');
     }
   };
 
   useEffect(() => {
-    fetchUser(); // Chamada inicial ao montar o componente
-  }, []); // Sem dependências para rodar apenas uma vez na montagem
+    // Este listener é a forma mais robusta de lidar com o estado de autenticação do Firebase.
+    // Ele é acionado na inicialização do app (para verificar persistência) e em mudanças de estado (login/logout).
+    const unsubscribe = onAuthStateChanged(auth, async (authUser) => {
+      if (authUser) {
+        // Se há um usuário autenticado (authUser), buscamos/garantimos seu perfil no Firestore
+        try {
+          const userProfile = await ensureUserProfile(authUser);
+          setUser(userProfile);
+          setIsLogged(true);
+          console.log('GlobalProvider (onAuthStateChanged): Usuário autenticado e perfil carregado/garantido.', userProfile?.uid);
+        } catch (error) {
+          console.error('GlobalProvider (onAuthStateChanged): Erro ao garantir perfil:', error);
+          setUser(null);
+          setIsLogged(false);
+        }
+      } else {
+        // Se não há usuário autenticado
+        setUser(null);
+        setIsLogged(false);
+        console.log('GlobalProvider (onAuthStateChanged): Nenhum usuário autenticado.');
+      }
+      setLoading(false); // O carregamento inicial é finalizado aqui
+    });
+
+    // Retorna uma função para cancelar a subscrição do listener quando o componente é desmontado
+    return () => unsubscribe();
+  }, []); // Array de dependências vazio para que rode apenas na montagem
 
   // Adicionamos 'refetchUser: fetchUser' ao valor do contexto
   return (

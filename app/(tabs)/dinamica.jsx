@@ -1,21 +1,43 @@
-import { useGlobalContext } from '../../context/GlobalProvider';
+// app/(tabs)/dinamica.jsx
+
+import { useEffect } from 'react';
 import { useRouter } from 'expo-router';
-import React from 'react';
-import { useFocusEffect } from '@react-navigation/native';
+import { useGlobalContext } from '../../context/GlobalProvider';
+import { ActivityIndicator, View, Text } from 'react-native';
 
-export default function DinamicaTab() {
-  const { user } = useGlobalContext();
+const Dinamica = () => {
   const router = useRouter();
+  const { user, isLoading } = useGlobalContext();
 
-  useFocusEffect(
-    React.useCallback(() => {
+  useEffect(() => {
+    if (!isLoading) {
       if (user?.role === 'enfermeiro') {
-        router.replace('/enfermeiro/create');
+        // Redireciona para a tela de criação (fora das abas)
+        router.replace('/enfermeiro/create'); 
       } else if (user?.role === 'medico') {
-        router.replace('/medico/laudo');
+        // Redireciona para a tela de laudo (fora das abas)
+        router.replace('/medico/laudo');     
+      } else {
+        // Caso o role não seja reconhecido ou o usuário não esteja logado, 
+        // ou se tentar acessar dinamicamente sem um role específico,
+        // pode redirecionar para a home para evitar erros.
+        router.replace('/home'); 
       }
-    }, [user, router])
-  );
+    }
+  }, [user, isLoading, router]);
 
+  // Exibe um indicador de carregamento enquanto o redirecionamento ocorre
+  if (isLoading) {
+    return (
+      <View className="flex-1 justify-center items-center bg-primary">
+        <ActivityIndicator size="large" color="#FFA001" />
+        <Text className="text-white mt-4">Verificando permissões...</Text>
+      </View>
+    );
+  }
+
+  // O componente Dinamica não renderiza UI própria, apenas redireciona
   return null;
-}
+};
+
+export default Dinamica;

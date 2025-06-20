@@ -6,8 +6,8 @@ import SearchInput from '../../components/SearchInput';
 import Trending from '../../components/Trending';
 import EmptyState from '../../components/EmptyState';
 import { useState } from 'react';
-import { getAllPosts , getLatestPosts, searchPosts} from '../../lib/appwrite';
-import useAppwrite from '../../lib/useAppwrite';
+
+
 import VideoCard from '../../components/VideoCard';
 import { useLocalSearchParams } from 'expo-router';
 

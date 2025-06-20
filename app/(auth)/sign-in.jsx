@@ -6,13 +6,14 @@ import { Link, router } from 'expo-router'
 import { images } from '../../constants'
 import FormField from '../../components/FormField'
 import CustomButton from '../../components/CustomButton'
-import { getCurrentUser, signIn, ensureUserProfile } from '../../lib/appwrite'
+// MUDANÇA AQUI: Importa as funções do novo lib/firebase.js
+import { signIn } from '../../lib/firebase' // getCurrentUser e ensureUserProfile serão chamados no GlobalProvider
 
 import { useGlobalContext } from '../../context/GlobalProvider';
 
 const SignIn = () => {
   // Desestruturamos refetchUser do contexto global
-  const { setUser, setIsLogged, refetchUser } = useGlobalContext();
+  const { refetchUser } = useGlobalContext(); // Precisamos apenas de refetchUser aqui
 
   const [form, setForm] = useState({
     email: '',
@@ -23,35 +24,41 @@ const SignIn = () => {
 
   const submit = async () => {
     if (!form.email || !form.password) {
-      Alert.alert('Error', 'Please fill all fields');
+      Alert.alert('Erro', 'Por favor, preencha todos os campos');
       return;
     }
 
     setIsSubmitting(true);
 
     try {
-      // Tenta fazer o login
+      // Tenta fazer o login com Firebase
       await signIn(form.email, form.password);
       
-      // Após o login, aciona a busca de usuário novamente no GlobalProvider
-      // Isso garantirá que o objeto 'user' no contexto global seja atualizado com o role
+      // Após o login bem-sucedido no Firebase Auth, aciona a busca de usuário novamente no GlobalProvider.
+      // O GlobalProvider (que já atualizamos) se encarregará de buscar o perfil do Firestore
+      // e de atualizar os estados isLogged e user.
       await refetchUser(); 
 
-      // O refetchUser já vai setar o user e isLogged no contexto,
-      // então as linhas abaixo podem ser redundantes se refetchUser for bem-sucedido.
-      // No entanto, as mantemos por segurança caso o GlobalProvider mude sua implementação.
-      const currentUser = await getCurrentUser(); 
-      if (currentUser) {
-        await ensureUserProfile(currentUser); // Garante que o perfil existe!
-        // setUser(currentUser); // Já é feito pelo refetchUser
-        // setIsLogged(true); // Já é feito pelo refetchUser
-      }
-
-      Alert.alert('Success', 'Login successful');
+      Alert.alert('Sucesso', 'Login realizado com sucesso!');
       router.replace('/home'); // Redireciona para a tela inicial
     } catch (error) {
-      Alert.alert('Erro', error.message);
-      console.error("Erro durante o processo de login:", error); // Adicionado console.error para mais detalhes
+      // Firebase Authentication Errors são objetos Error com uma propriedade 'code'
+      // É uma boa prática verificar o código para mensagens mais específicas
+      let errorMessage = 'Ocorreu um erro ao fazer login.';
+      if (error.code === 'auth/invalid-email') {
+        errorMessage = 'Endereço de e-mail inválido.';
+      } else if (error.code === 'auth/user-disabled') {
+        errorMessage = 'Sua conta foi desativada.';
+      } else if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+        errorMessage = 'Credenciais inválidas. Verifique seu e-mail e senha.';
+      } else if (error.code === 'auth/too-many-requests') {
+        errorMessage = 'Muitas tentativas de login. Tente novamente mais tarde.';
+      } else {
+        errorMessage = error.message; // Mensagem genérica se o erro não for reconhecido
+      }
+
+      Alert.alert('Erro no Login', errorMessage);
+      console.error("Erro detalhado durante o login (Firebase):", error);
     } finally {
       setIsSubmitting(false);
     }
@@ -74,7 +81,7 @@ const SignIn = () => {
         <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
           <View className="w-full justify-center min-h-[100vh] px-8 my-3">
             <Text className="text-3xl text-black text-semibold mt-10 font-psemibold">
-              Log in
+              Entrar
             </Text>
 
             <FormField
@@ -87,7 +94,7 @@ const SignIn = () => {
             />
 
             <FormField
-              title="Password"
+              title="Senha" // Traduzido para 'Senha'
               value={form.password}
               placeholder="Senha" // Adicionado placeholder para clareza
               handleChangeText={(e) => setForm({ ...form, password: e })}
@@ -95,17 +102,17 @@ const SignIn = () => {
               />
 
             <CustomButton
-              title="Sign in"
+              title="Entrar" // Traduzido para 'Entrar'
               handlePress={submit}
               containerStyles="mt-7"
               isLoading={isSubmitting}
             />
 
             <View className="justify-center pt-5 flex-row gap-2">
-              <Text className="text-white text-sm font-pmedium">Don't have an account?</Text>
+              <Text className="text-white text-sm font-pmedium">Não tem uma conta?</Text> {/* Traduzido */}
               <Link href="/sign-up" className="text-lg font-psemibold text-secondary">
-                Sign Up
-              </Link>
+                Cadastre-se
+              </Link> {/* Traduzido */}
             </View>
           </View>
         </ScrollView>
