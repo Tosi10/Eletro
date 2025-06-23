@@ -8,10 +8,9 @@ import { icons } from '../../constants';
 import { getPendingEcgs, updateEcgLaudation, getEcgById } from '../../lib/firebase'; 
 import { useGlobalContext } from '../../context/GlobalProvider';
 import { useRouter } from 'expo-router'; 
-import Modal from 'react-native-modal'; // Ainda usaremos este Modal para envolver o ImageViewer
-
-// >>> IMPORTAÇÃO DA NOVA BIBLIOTECA PARA ZOOM E ROTAÇÃO <<<
+import Modal from 'react-native-modal'; 
 import ImageViewer from 'react-native-image-zoom-viewer'; 
+import * as ScreenOrientation from 'expo-screen-orientation'; 
 
 const Laudo = () => {
   const { user } = useGlobalContext();
@@ -20,7 +19,6 @@ const Laudo = () => {
   const [selectedEcg, setSelectedEcg] = useState(null); 
   const [loadingEcgs, setLoadingEcgs] = useState(false); 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  // Novo estado para controlar a visibilidade do modal da imagem
   const [showFullImage, setShowFullImage] = useState(false); 
 
   const [laudoForm, setLaudoForm] = useState({
@@ -122,6 +120,29 @@ const Laudo = () => {
     }
   }, [user, selectedPriorityType, fetchAndSelectFirstEcg]);
 
+  useEffect(() => {
+    const lockOrientation = async () => {
+      if (showFullImage) {
+        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.ALL);
+        StatusBar.setHidden(true); 
+      } else {
+        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+        StatusBar.setHidden(false); 
+      }
+    };
+    lockOrientation();
+
+    const subscription = Dimensions.addEventListener('change', ({ window: { width, height } }) => {
+      console.log('Dimensões da tela mudaram:', { width, height });
+    });
+
+    return () => {
+      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+      StatusBar.setHidden(false);
+      subscription.remove(); 
+    };
+  }, [showFullImage]); 
+
   const submitLaudo = async () => {
     if (!selectedEcg) {
       Alert.alert('Erro', 'Nenhum ECG selecionado para laudar.');
@@ -143,7 +164,7 @@ const Laudo = () => {
         fc: laudoForm.fc,
         pr: laudoForm.pr,
         qrs: laudoForm.qrs,
-        eixo: laudoForm.eixo,
+        eixo: laudoForm.eixo, 
         brc: laudoForm.brc,
         brd: laudoForm.brd,
         repolarizacao: laudoForm.repolarizacao,
@@ -158,13 +179,19 @@ const Laudo = () => {
       );
       
       Alert.alert('Sucesso', 'Laudo enviado com sucesso!');
-      setSelectedEcg(null); 
-      fetchAndSelectFirstEcg(selectedPriorityType); 
-      setLaudoForm({ 
+      
+      // >>> ALTERAÇÃO AQUI: Navegação após o laudo <<<
+      setSelectedEcg(null); // Limpa o ECG selecionado
+      setLaudoForm({ // Reseta o formulário de laudo
         ritmo: '', fc: '', pr: '', qrs: '', eixo: '',
         brc: false, brd: false, repolarizacao: '',
         outrosAchados: '', laudoFinal: '',
       });
+      setSelectedPriorityType(null); // Volta para a tela de seleção de prioridade (Urgente/Eletivo)
+      
+      // Se você quiser voltar para a Home em vez da seleção de prioridade, use:
+      // router.replace('/home'); 
+
     } catch (error) {
       Alert.alert('Erro no Laudo', error.message);
       console.error('Erro ao submeter laudo:', error);
@@ -197,10 +224,18 @@ const Laudo = () => {
   };
 
   const handleOpenChat = () => {
-    if (selectedEcg && selectedEcg.id) { 
-      router.push(`/medico/chat/${selectedEcg.id}`); 
-    } else {
-      Alert.alert('Erro', 'Selecione um ECG para abrir o chat.');
+    if (!selectedEcg || !selectedEcg.id) {
+      Alert.alert('Erro', 'Selecione um ECG para abrir o chat. Por favor, certifique-se de que um ECG esteja carregado.');
+      return;
+    }
+
+    console.log('Tentando navegar para o chat com ECG ID:', selectedEcg.id);
+
+    try {
+      router.push(`/chat/${selectedEcg.id}`); 
+    } catch (error) {
+      console.error("Erro ao tentar navegar para o chat:", error);
+      Alert.alert('Erro de Navegação', 'Não foi possível abrir o chat. Por favor, verifique se a rota do chat está configurada corretamente no seu projeto Expo.');
     }
   };
 
@@ -249,7 +284,6 @@ const Laudo = () => {
           <View className="mt-8 p-4 bg-black-100 rounded-xl border-2 border-black-200">
             <Text className="text-xl text-white font-psemibold mb-4">Laudar ECG de {selectedEcg.patientName}</Text>
             
-            {/* TouchableOpacity para abrir a imagem em tela cheia com zoom */}
             <TouchableOpacity onPress={() => setShowFullImage(true)} className="w-full h-64 rounded-lg mb-4">
               <Image
                 source={{ uri: selectedEcg.imageUrl }}
@@ -265,8 +299,6 @@ const Laudo = () => {
               <Text className="text-gray-100 font-pregular">Prioridade: {selectedEcg.priority}</Text>
               {selectedEcg.notes && <Text className="text-gray-100 font-pregular">Notas: {selectedEcg.notes}</Text>}
             </View>
-
-            {/* --- Formulário de Laudo --- */}
 
             <RadioGroup
               label="Ritmo"
@@ -307,7 +339,6 @@ const Laudo = () => {
               otherStyles="mt-7"
             />
 
-            {/* Checkboxes para BRC / BRD */}
             <View className="mt-7">
               <Text className="text-base text-gray-100 font-pmedium mb-2">Bloqueios de Ramo</Text>
               <View className="flex-row space-x-4">
@@ -361,7 +392,7 @@ const Laudo = () => {
             />
 
             <CustomButton
-              title="Abrir Chat sobre este ECG"
+              title="Abrir Chat "
               handlePress={handleOpenChat}
               containerStyles="mt-4 mb-10 bg-green-600" 
             />
@@ -370,43 +401,28 @@ const Laudo = () => {
         )}
       </ScrollView>
 
-      {/* Modal para Visualização da Imagem em Tela Cheia com Zoom e Rotação */}
       <Modal 
         isVisible={showFullImage}
-        // Usamos um handler para o evento de fechamento do modal
-        // 'onBackdropPress' e 'onSwipeComplete' do react-native-modal não são ideais aqui,
-        // pois ImageViewer tem seus próprios controles de gesture.
-        // O botão 'X' é a forma primária de fechar.
-        onModalHide={() => {
-            // Garante que a StatusBar volte ao normal após o modal
-            StatusBar.setHidden(false);
-        }}
-        onModalWillShow={() => {
-            // Esconde a StatusBar ao mostrar o modal
-            StatusBar.setHidden(true);
-        }}
-        // Garante que o modal ocupe a tela inteira
+        onModalWillShow={() => { /* Gerenciado pelo useEffect */ }}
+        onModalHide={() => { /* Gerenciado pelo useEffect */ }}
         style={{ margin: 0, backgroundColor: 'black' }} 
       >
         {selectedEcg && (
-          // ImageViewer para zoom e pan
           <ImageViewer
             imageUrls={[{ url: selectedEcg.imageUrl }]}
-            enableSwipeDown={true} // Permite arrastar para baixo para fechar
-            onSwipeDown={() => setShowFullImage(false)} // Fecha o modal ao arrastar para baixo
-            renderIndicator={() => null} // Remove o indicador de página (se houver apenas 1 imagem)
-            // Renderiza um cabeçalho customizado para o botão de fechar
+            enableSwipeDown={true} 
+            onSwipeDown={() => setShowFullImage(false)} 
+            renderIndicator={() => null} 
             renderHeader={() => (
               <SafeAreaView className="absolute top-0 left-0 right-0 z-50 p-4">
                 <TouchableOpacity
                   onPress={() => setShowFullImage(false)}
-                  className="p-3 rounded-full bg-gray-800 self-end" // Alinha à direita
+                  className="p-3 rounded-full bg-gray-800 self-end" 
                 >
                   <Image source={icons.close} className="w-6 h-6" tintColor="#FFFFFF" />
                 </TouchableOpacity>
               </SafeAreaView>
             )}
-            // Estilos para o ImageViewer (garantir que ele ocupe a tela)
             style={{ flex: 1, backgroundColor: 'black' }}
           />
         )}
