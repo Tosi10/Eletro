@@ -71,7 +71,7 @@ const Home = () => {
             {/* Seções de texto informativas */}
             <View className="w-full pt-7 pb-8 items-center">
               <Text className="text-gray-100 text-2xl font-pregular mb-3 text-center">
-                ECG Flow
+                V6 Core
               </Text>
               <Text className="text-white text-xl font-psemibold mb-2 text-center">
                 Sua Plataforma para Gestão de ECGs

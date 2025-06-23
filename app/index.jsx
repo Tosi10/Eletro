@@ -34,7 +34,7 @@ export default function App() {
 
             <View className="relative mt-5">
               <Text className="text-5xl text-white font-bold text-center">
-                Carol App{' '}
+                V6 Core{' '}
                 {/*<Text className="text-secondary-200">M2</Text>*/}
               </Text>
 

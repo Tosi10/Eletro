@@ -1,14 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, Image, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, ScrollView, Image, TouchableOpacity, ActivityIndicator, Alert, Dimensions, StatusBar } from 'react-native'; 
 import { SafeAreaView } from 'react-native-safe-area-context';
-// MUDANÇA AQUI: Importa do Firebase
-import { getPendingEcgs, updateEcgLaudation, getEcgById } from '../../lib/firebase'; 
-import { useGlobalContext } from '../../context/GlobalProvider';
 import FormField from '../../components/FormField'; 
 import CustomButton from '../../components/CustomButton'; 
 import EcgCard from '../../components/EcgCard'; 
-import { useRouter } from 'expo-router'; 
 import { icons } from '../../constants'; 
+import { getPendingEcgs, updateEcgLaudation, getEcgById } from '../../lib/firebase'; 
+import { useGlobalContext } from '../../context/GlobalProvider';
+import { useRouter } from 'expo-router'; 
+import Modal from 'react-native-modal'; // Ainda usaremos este Modal para envolver o ImageViewer
+
+// >>> IMPORTAÇÃO DA NOVA BIBLIOTECA PARA ZOOM E ROTAÇÃO <<<
+import ImageViewer from 'react-native-image-zoom-viewer'; 
 
 const Laudo = () => {
   const { user } = useGlobalContext();
@@ -17,6 +20,8 @@ const Laudo = () => {
   const [selectedEcg, setSelectedEcg] = useState(null); 
   const [loadingEcgs, setLoadingEcgs] = useState(false); 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Novo estado para controlar a visibilidade do modal da imagem
+  const [showFullImage, setShowFullImage] = useState(false); 
 
   const [laudoForm, setLaudoForm] = useState({
     ritmo: '',
@@ -78,17 +83,17 @@ const Laudo = () => {
     return finalContent.join('\n'); 
   };
 
-  const updateFormAndGenerateLaudo = (field, value) => {
+  const updateFormAndGenerateLaudo = (field, value) => { 
     setLaudoForm(prevForm => {
       const updatedForm = { ...prevForm, [field]: value };
-      if (field !== 'laudoFinal') {
+      if (field !== 'laudoFinal') { 
         updatedForm.laudoFinal = generateLaudoFinal(updatedForm);
       }
       return updatedForm;
     });
   };
 
-  const fetchAndSelectFirstEcg = async (priorityType) => {
+  const fetchAndSelectFirstEcg = useCallback(async (priorityType) => {
     setLoadingEcgs(true);
     setSelectedEcg(null); 
     setLaudoForm({ 
@@ -97,7 +102,6 @@ const Laudo = () => {
       outrosAchados: '', laudoFinal: '',
     });
     try {
-      // MUDANÇA AQUI: getPendingEcgs agora filtra por prioridade diretamente
       const ecgs = await getPendingEcgs(priorityType); 
       if (ecgs.length > 0) {
         setSelectedEcg(ecgs[0]); 
@@ -110,13 +114,13 @@ const Laudo = () => {
     } finally {
       setLoadingEcgs(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (user?.role === 'medico' && selectedPriorityType) {
       fetchAndSelectFirstEcg(selectedPriorityType);
     }
-  }, [user, selectedPriorityType]);
+  }, [user, selectedPriorityType, fetchAndSelectFirstEcg]);
 
   const submitLaudo = async () => {
     if (!selectedEcg) {
@@ -127,7 +131,7 @@ const Laudo = () => {
       Alert.alert('Campos Obrigatórios', 'Por favor, preencha o campo de Laudo Final.');
       return;
     }
-    if (!user || !user.uid) { // Verifica user.uid
+    if (!user || !user.uid) { 
       Alert.alert('Erro', 'Usuário não autenticado. Faça login novamente.');
       return;
     }
@@ -147,9 +151,9 @@ const Laudo = () => {
       };
 
       await updateEcgLaudation(
-        selectedEcg.id, // MUDANÇA AQUI: Usa selectedEcg.id para o Firebase
+        selectedEcg.id, 
         laudoForm.laudoFinal,
-        user.uid, // MUDANÇA AQUI: Usa user.uid para o Firebase
+        user.uid, 
         structuredLaudationDetails 
       );
       
@@ -189,19 +193,12 @@ const Laudo = () => {
   );
 
   const handleBack = () => {
-    if (selectedEcg) {
-      setSelectedEcg(null);
-    } else if (selectedPriorityType) {
-      setSelectedPriorityType(null);
-    }
-    else {
-      router.push('/home');
-    }
+    router.replace('/home'); 
   };
 
   const handleOpenChat = () => {
-    if (selectedEcg && selectedEcg.id) { // MUDANÇA AQUI: Usa selectedEcg.id
-      router.push(`/chat/${selectedEcg.id}`); 
+    if (selectedEcg && selectedEcg.id) { 
+      router.push(`/medico/chat/${selectedEcg.id}`); 
     } else {
       Alert.alert('Erro', 'Selecione um ECG para abrir o chat.');
     }
@@ -210,10 +207,9 @@ const Laudo = () => {
   return (
     <SafeAreaView className="bg-primary h-full flex-1">
       <ScrollView className="px-4 my-6">
-        {/* Botão de Voltar */}
         <TouchableOpacity onPress={handleBack} className="flex-row items-center mb-6">
           <Image source={icons.leftArrow} className="w-6 h-6 mr-2" resizeMode="contain" tintColor="#FFFFFF" />
-          <Text className="text-white text-base font-pmedium">Voltar</Text>
+          <Text className="text-white text-base font-pmedium">Voltar para Home</Text>
         </TouchableOpacity>
 
         <Text className="text-2xl text-white font-psemibold mb-6">
@@ -253,14 +249,18 @@ const Laudo = () => {
           <View className="mt-8 p-4 bg-black-100 rounded-xl border-2 border-black-200">
             <Text className="text-xl text-white font-psemibold mb-4">Laudar ECG de {selectedEcg.patientName}</Text>
             
-            <Image
-              source={{ uri: selectedEcg.imageUrl }}
-              className="w-full h-64 rounded-lg mb-4"
-              resizeMode="contain"
-            />
+            {/* TouchableOpacity para abrir a imagem em tela cheia com zoom */}
+            <TouchableOpacity onPress={() => setShowFullImage(true)} className="w-full h-64 rounded-lg mb-4">
+              <Image
+                source={{ uri: selectedEcg.imageUrl }}
+                className="w-full h-full"
+                resizeMode="contain"
+              />
+            </TouchableOpacity>
+            
             <View className="mb-4">
               <Text className="text-gray-100 font-pregular">Idade: {selectedEcg.age}</Text>
-              <Text className="text-gray-100 font-pregular">Sexo: {selectedEcg.sex}</Text>
+              <Text className="text-gray-100 font-pregular">Sexo: {selectedEcg.sex}</Text> 
               <Text className="text-gray-100 font-pregular">Marcapasso: {selectedEcg.hasPacemaker}</Text>
               <Text className="text-gray-100 font-pregular">Prioridade: {selectedEcg.priority}</Text>
               {selectedEcg.notes && <Text className="text-gray-100 font-pregular">Notas: {selectedEcg.notes}</Text>}
@@ -337,7 +337,7 @@ const Laudo = () => {
               title="Outros Achados"
               value={laudoForm.outrosAchados}
               placeholder="Descreva outros achados não listados..."
-              handleChangeText={(e) => updateFormAndGenerateLaulo('outrosAchados', e)}
+              handleChangeText={(e) => updateFormAndGenerateLaudo('outrosAchados', e)} 
               otherStyles="mt-7"
               multiline={true} 
               numberOfLines={4} 
@@ -369,6 +369,48 @@ const Laudo = () => {
           </View>
         )}
       </ScrollView>
+
+      {/* Modal para Visualização da Imagem em Tela Cheia com Zoom e Rotação */}
+      <Modal 
+        isVisible={showFullImage}
+        // Usamos um handler para o evento de fechamento do modal
+        // 'onBackdropPress' e 'onSwipeComplete' do react-native-modal não são ideais aqui,
+        // pois ImageViewer tem seus próprios controles de gesture.
+        // O botão 'X' é a forma primária de fechar.
+        onModalHide={() => {
+            // Garante que a StatusBar volte ao normal após o modal
+            StatusBar.setHidden(false);
+        }}
+        onModalWillShow={() => {
+            // Esconde a StatusBar ao mostrar o modal
+            StatusBar.setHidden(true);
+        }}
+        // Garante que o modal ocupe a tela inteira
+        style={{ margin: 0, backgroundColor: 'black' }} 
+      >
+        {selectedEcg && (
+          // ImageViewer para zoom e pan
+          <ImageViewer
+            imageUrls={[{ url: selectedEcg.imageUrl }]}
+            enableSwipeDown={true} // Permite arrastar para baixo para fechar
+            onSwipeDown={() => setShowFullImage(false)} // Fecha o modal ao arrastar para baixo
+            renderIndicator={() => null} // Remove o indicador de página (se houver apenas 1 imagem)
+            // Renderiza um cabeçalho customizado para o botão de fechar
+            renderHeader={() => (
+              <SafeAreaView className="absolute top-0 left-0 right-0 z-50 p-4">
+                <TouchableOpacity
+                  onPress={() => setShowFullImage(false)}
+                  className="p-3 rounded-full bg-gray-800 self-end" // Alinha à direita
+                >
+                  <Image source={icons.close} className="w-6 h-6" tintColor="#FFFFFF" />
+                </TouchableOpacity>
+              </SafeAreaView>
+            )}
+            // Estilos para o ImageViewer (garantir que ele ocupe a tela)
+            style={{ flex: 1, backgroundColor: 'black' }}
+          />
+        )}
+      </Modal>
     </SafeAreaView>
   );
 };
