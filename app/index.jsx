@@ -14,7 +14,7 @@ export default function App() {
   return (
     <SafeAreaView className="h-full flex-1">
       <ImageBackground
-        source={images.cardio2}
+        source={images.cardio2m7n}
         resizeMode="cover"
         style={{ flex: 1, width: '100%', height: '100%' }}
       >

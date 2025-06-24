@@ -1,9 +1,10 @@
 import { Text, View, FlatList, Image, RefreshControl, Alert, TouchableOpacity, ActivityIndicator } from 'react-native';
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react'; 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { icons, images } from '../../constants';
 import EmptyState from '../../components/EmptyState';
-import { getUserPosts, signOut, getPendingEcgs, getLaudedEcgsByDoctorId } from '../../lib/firebase'; 
+// Importa 'db' (embora não seja mais usado diretamente aqui para contagem global)
+import { getUserPosts, signOut, getPendingEcgs, getLaudedEcgsByDoctorId, db } from '../../lib/firebase'; 
 import useFirebaseData from '../../lib/useFirebaseData'; 
 import { useGlobalContext } from '../../context/GlobalProvider';
 import InfoBox from '../../components/InfoBox';
@@ -11,8 +12,15 @@ import { router } from 'expo-router';
 
 import EcgCard from '../../components/EcgCard';
 
+// Removida importação de 'collection', 'query', 'where', 'onSnapshot', 'orderBy'
+// pois a lógica de contagem global foi movida para EcgCard.
+
 const Profile = () => {
   const { user, setUser, setIsLogged, isLoading: isGlobalLoading } = useGlobalContext();
+  // Removidos estados de contagem global de mensagens não lidas
+  // const [unreadMessageCount, setUnreadMessageCount] = useState(0);
+  // const [loadingUnread, setLoadingUnread] = useState(true);
+  // const unreadListenersAndCounts = useRef({}); 
 
   const fetchEcgsFunction = useCallback(() => {
     if (!user?.uid) { 
@@ -59,9 +67,15 @@ const Profile = () => {
   }, [user?.role, user?.uid]);
 
   useEffect(() => {
-    // REMOVIDO: console.log('DEBUG DO AVATAR (dentro do useEffect): user.avatar é:', user?.avatar);
     fetchPendingForDoctor(); 
   }, [user, fetchPendingForDoctor]);
+
+  // Removido o useEffect para a contagem global de mensagens não lidas
+  /*
+  useEffect(() => {
+    // ... (toda a lógica de contagem global de mensagens foi removida daqui)
+  }, [user, ecgs, areEcgsLoading, db]);
+  */
 
   const [refreshing, setRefreshing] = useState(false);
 
@@ -72,7 +86,7 @@ const Profile = () => {
     setRefreshing(false);
   };
 
-  const logout = async () => {
+  const handleLogout = async () => { 
     try {
       await signOut(); 
       setUser(null);
@@ -84,7 +98,7 @@ const Profile = () => {
     }
   };
 
-  const laudedEcgsCount = ecgs.filter(ecg => ecg.status === 'lauded').length;
+  const laudedsOrSentEcgsCount = ecgs.length || 0;
 
   if (isGlobalLoading || !user || areEcgsLoading || (user?.role === 'medico' && fetchingPending)) {
     return (
@@ -101,13 +115,14 @@ const Profile = () => {
         data={ecgs}
         keyExtractor={(item) => item.id} 
         renderItem={({ item }) => (
-          <EcgCard ecg={item} />
+          // PASSANDO currentUserId PARA O EcgCard
+          <EcgCard ecg={item} currentUserId={user?.uid} /> 
         )}
         ListHeaderComponent={() => (
           <View className="w-full justify-center items-center mt-6 mb-12 px-4">
             <TouchableOpacity
               className="w-full items-end mb-10"
-              onPress={logout}
+              onPress={handleLogout} 
             >
               <Image source={icons.logout}
                 resizeMode='contain' className="w-6 h-6" />
@@ -115,7 +130,7 @@ const Profile = () => {
 
             <View className="w-24 h-24 border border-secondary rounded-full justify-center items-center p-1">
               <Image
-                source={images.profile} // SEMPRE USA A IMAGEM LOCAL
+                source={images.profile} 
                 className="w-full h-full rounded-full" 
                 resizeMode='cover' 
               />
@@ -131,13 +146,13 @@ const Profile = () => {
               {user?.role === 'enfermeiro' ? (
                 <>
                   <InfoBox
-                    title={ecgs.length || 0}
+                    title={laudedsOrSentEcgsCount}
                     subtitle="ECGs Enviados"
                     containerStyles="mr-10"
                     titleStyles="text-xl"
                   />
                   <InfoBox
-                    title={laudedEcgsCount}
+                    title={ecgs.filter(ecg => ecg.status === 'lauded').length}
                     subtitle="Laudos Recebidos"
                     titleStyles="text-xl"
                   />
@@ -145,7 +160,7 @@ const Profile = () => {
               ) : ( 
                 <>
                   <InfoBox
-                    title={ecgs.length || 0} 
+                    title={laudedsOrSentEcgsCount} 
                     subtitle="ECGs Laudados"
                     containerStyles="mr-10"
                     titleStyles="text-xl"
@@ -158,6 +173,24 @@ const Profile = () => {
                 </>
               )}
             </View>
+
+            {/* REMOVIDO: Botão Abrir Chat global com Contador de Mensagens Não Lidas */}
+            {/*
+            <TouchableOpacity
+              onPress={() => router.push('/chat-inbox')} 
+              className="flex-row items-center justify-center bg-secondary-100 rounded-xl min-h-[60px] w-full px-4 mt-7"
+            >
+              <Text className="text-lg text-white font-psemibold">Abrir Chat</Text>
+              {loadingUnread ? (
+                <ActivityIndicator size="small" color="#FFFFFF" className="ml-2" />
+              ) : unreadMessageCount > 0 ? (
+                <View className="ml-3 bg-red-500 rounded-full w-7 h-7 flex items-center justify-center">
+                  <Text className="text-white text-sm font-pbold">{unreadMessageCount}</Text>
+                </View>
+              ) : null}
+            </TouchableOpacity>
+            */}
+
           </View>
         )}
         ListEmptyComponent={() => (

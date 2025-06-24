@@ -1,195 +1,200 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, Alert, Image, FlatList, KeyboardAvoidingView, Platform } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-// MUDANÇA AQUI: Importa as funções do novo lib/firebase.js
-import { getEcgMessages, sendEcgMessage, subscribeToEcgMessages, getEcgById } from '../../lib/firebase'; 
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { View, Text, TextInput, TouchableOpacity, FlatList, Image, SafeAreaView, ActivityIndicator, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import { useLocalSearchParams, Stack, router } from 'expo-router';
 import { useGlobalContext } from '../../context/GlobalProvider';
-import { icons, images } from '../../constants';
+import { getEcgById, sendEcgMessage, subscribeToEcgMessages, markEcgMessagesAsRead } from '../../lib/firebase';
+// >>> CORRIGIDO AQUI: Caminho da importação para 'constants' <<<
+import { icons } from '../../constants'; 
+
+// Componente para renderizar cada mensagem individualmente
+const MessageItem = ({ message, currentUserId }) => {
+  const isMyMessage = message.senderId === currentUserId;
+  // Formata o timestamp do servidor ou um novo Date para mensagens ainda não sincronizadas
+  const timestamp = message.createdAt?.toDate ? message.createdAt.toDate() : new Date();
+  const timeString = timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  return (
+    <View className={`flex-row items-end mb-2 ${isMyMessage ? 'justify-end' : 'justify-start'}`}>
+      {!isMyMessage && (
+        <Image
+          source={message.sender?.avatar ? { uri: message.sender.avatar } : icons.profile}
+          className="w-8 h-8 rounded-full mr-2"
+          resizeMode="cover"
+        />
+      )}
+      <View className={`p-3 rounded-lg max-w-[75%] ${isMyMessage ? 'bg-secondary-100' : 'bg-gray-700'}`}>
+        {!isMyMessage && (
+          <Text className="text-white text-xs font-psemibold mb-1">
+            {message.sender?.username || 'Usuário Desconhecido'}
+          </Text>
+        )}
+        <Text className="text-white font-pregular text-base">{message.message}</Text>
+        <Text className={`text-xs mt-1 ${isMyMessage ? 'text-gray-300 self-end' : 'text-gray-400 self-start'}`}>
+          {timeString} {isMyMessage && message.isRead && '✓'} {/* Adiciona o check de lido para suas mensagens */}
+        </Text>
+      </View>
+      {isMyMessage && (
+        <Image
+          source={message.sender?.avatar ? { uri: message.sender.avatar } : icons.profile}
+          className="w-8 h-8 rounded-full ml-2"
+          resizeMode="cover"
+        />
+      )}
+    </View>
+  );
+};
 
 const ChatScreen = () => {
   const { ecgId } = useLocalSearchParams();
-  const router = useRouter();
-  const { user } = useGlobalContext();
+  const { user, isLoading: isGlobalLoading } = useGlobalContext();
+  const [ecgDetails, setEcgDetails] = useState(null);
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
-  const [ecgDetails, setEcgDetails] = useState(null);
+  const [loadingEcg, setLoadingEcg] = useState(true);
+  const [sendingMessage, setSendingMessage] = useState(false);
   const flatListRef = useRef(null);
 
+  // 1. Efeito para carregar os detalhes do ECG
   useEffect(() => {
-    if (!ecgId || !user || !user.uid) { // Verifica user.uid
-      if (router.canGoBack()) {
-        router.back();
-      } else {
-        router.replace('/home'); 
+    const fetchEcgDetails = async () => {
+      if (!ecgId) return;
+      setLoadingEcg(true);
+      try {
+        const data = await getEcgById(ecgId);
+        setEcgDetails(data);
+      } catch (error) {
+        console.error("Erro ao carregar detalhes do ECG:", error);
+        Alert.alert("Erro", "Não foi possível carregar os detalhes do ECG.");
+        router.back(); 
+      } finally {
+        setLoadingEcg(false);
       }
+    };
+    fetchEcgDetails();
+  }, [ecgId]);
+
+  // 2. Efeito para subscrever a mensagens em tempo real
+  useEffect(() => {
+    if (!ecgId || !user?.uid) {
+      console.log("ChatScreen: ecgId ou user.uid não disponíveis para subscrição.");
       return;
     }
 
-    const fetchInitialData = async () => {
-      setIsLoading(true);
-      try {
-        const ecgDoc = await getEcgById(ecgId);
-        setEcgDetails(ecgDoc);
+    console.log(`ChatScreen: Subscribing to messages for ECG ${ecgId} by user ${user.uid}`);
 
-        const initialMessages = await getEcgMessages(ecgId);
-        setMessages(initialMessages);
-      } catch (error) {
-        Alert.alert('Erro', 'Não foi possível carregar o chat ou detalhes do ECG.');
-        console.error('Erro ao carregar chat ou ECG details:', error);
-      } finally {
-        setIsLoading(false);
+    const unsubscribe = subscribeToEcgMessages(ecgId, user.uid, (newMessages) => {
+      setMessages(newMessages);
+      if (flatListRef.current) {
+        setTimeout(() => flatListRef.current.scrollToEnd({ animated: true }), 100);
       }
-    };
-
-    fetchInitialData();
-
-    // Configurar listener em tempo real para novas mensagens
-    // subscribeToEcgMessages já adiciona a nova mensagem e popula o sender
-    const unsubscribe = subscribeToEcgMessages(ecgId, (newMsg) => {
-      setMessages(prevMessages => {
-        // Verifica se a mensagem já existe (pelo ID do Firestore) para evitar duplicatas
-        if (prevMessages.some(msg => msg.id === newMsg.id)) { // MUDANÇA AQUI: usa msg.id
-          return prevMessages;
-        }
-        // Adiciona a nova mensagem e reordena por data de criação (createdAt no Firebase)
-        // Note: createdAt do Firebase é um Timestamp, precisamos compará-lo.
-        return [...prevMessages, newMsg].sort((a, b) => {
-          const dateA = a.createdAt && a.createdAt.toDate ? a.createdAt.toDate().getTime() : new Date(a.$createdAt).getTime();
-          const dateB = b.createdAt && b.createdAt.toDate ? b.createdAt.toDate().getTime() : new Date(b.$createdAt).getTime();
-          return dateA - dateB;
-        });
-      });
     });
 
     return () => {
+      console.log(`ChatScreen: Unsubscribing from messages for ECG ${ecgId}`);
       unsubscribe();
     };
-  }, [ecgId, user]);
+  }, [ecgId, user?.uid]); 
 
+  // 3. Efeito para marcar mensagens como lidas ao entrar no chat
   useEffect(() => {
-    if (flatListRef.current && messages.length > 0) {
-      flatListRef.current.scrollToEnd({ animated: true });
+    if (ecgId && user?.uid && messages.length > 0) {
+      const timer = setTimeout(() => {
+        markEcgMessagesAsRead(ecgId, user.uid)
+          .catch(error => console.error("Erro ao marcar mensagens como lidas na entrada:", error));
+      }, 1000); 
+      return () => clearTimeout(timer); 
     }
-  }, [messages]);
-
+  }, [ecgId, user?.uid, messages.length]); 
 
   const handleSendMessage = async () => {
-    if (!newMessage.trim() || !user || !user.uid || !ecgId) return; // Verifica user.uid
-
+    if (!newMessage.trim() || sendingMessage || !user?.uid || !ecgId) {
+      return;
+    }
+    setSendingMessage(true);
     try {
-      await sendEcgMessage(ecgId, user.uid, newMessage); // MUDANÇA AQUI: Usa user.uid
+      await sendEcgMessage(ecgId, user.uid, newMessage);
       setNewMessage(''); 
     } catch (error) {
-      Alert.alert('Erro ao Enviar', 'Não foi possível enviar a mensagem.');
-      console.error('Erro ao enviar mensagem:', error);
+      console.error("Erro ao enviar mensagem:", error);
+      Alert.alert("Erro", "Não foi possível enviar a mensagem.");
+    } finally {
+      setSendingMessage(false);
     }
   };
 
-  const renderMessage = ({ item }) => {
-    const isMyMessage = item.senderId === user.uid; // MUDANÇA AQUI: Usa user.uid
-    const senderName = item.sender?.username || 'Usuário Desconhecido';
-    const senderAvatar = item.sender?.avatar || images.profile; 
+  const MemoizedMessageItem = useCallback(({ item }) => (
+    <MessageItem message={item} currentUserId={user?.uid} />
+  ), [user?.uid]);
 
-    // Formata o timestamp do Firebase (se existir)
-    const messageTime = item.createdAt && item.createdAt.toDate ? 
-                        new Date(item.createdAt.toDate()).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) :
-                        (item.$createdAt ? new Date(item.$createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '');
-
-
+  if (isGlobalLoading || loadingEcg || !user || !ecgDetails) {
     return (
-      <View
-        className={`flex-row mb-4 ${isMyMessage ? 'justify-end' : 'justify-start'}`}
-      >
-        {!isMyMessage && ( 
-          <Image
-            source={{ uri: senderAvatar }}
-            className="w-8 h-8 rounded-full mr-2"
-            resizeMode="cover"
-          />
-        )}
-        <View
-          className={`px-4 py-2 rounded-lg max-w-[70%] ${
-            isMyMessage ? 'bg-blue-600' : 'bg-gray-700'
-          }`}
-        >
-          {!isMyMessage && <Text className="text-white font-psemibold text-xs mb-1">{senderName}</Text>}
-          <Text className="text-white">{item.message}</Text>
-          <Text className={`text-xs mt-1 ${isMyMessage ? 'text-blue-200' : 'text-gray-400'} self-end`}>
-            {messageTime}
-          </Text>
-        </View>
-        {isMyMessage && ( 
-          <Image
-            source={{ uri: senderAvatar }} 
-            className="w-8 h-8 rounded-full ml-2"
-            resizeMode="cover"
-          />
-        )}
-      </View>
-    );
-  };
-
-  if (isLoading) {
-    return (
-      <SafeAreaView className="bg-primary h-full justify-center items-center">
+      <SafeAreaView className="flex-1 justify-center items-center bg-primary">
         <ActivityIndicator size="large" color="#FFA001" />
-        <Text className="text-white mt-4">Carregando mensagens...</Text>
+        <Text className="text-white text-lg mt-4">Carregando chat...</Text>
       </SafeAreaView>
     );
   }
 
   return (
     <SafeAreaView className="flex-1 bg-primary">
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          headerBackVisible: false,
+          headerLeft: () => (
+            <TouchableOpacity onPress={() => router.back()} className="p-2">
+              <Image source={icons.leftArrow} className="w-6 h-6" tintColor="#FFA001" />
+            </TouchableOpacity>
+          ),
+          headerTitle: ecgDetails.patientName ? `Chat com ${ecgDetails.patientName}` : 'Chat do ECG',
+          headerTitleStyle: { color: '#FFFFFF', fontFamily: 'Poppins-SemiBold' },
+          headerStyle: { backgroundColor: '#161622' },
+        }}
+      />
       <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 60 : 0} 
+        className="flex-1"
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0} 
       >
-        {/* Cabeçalho do Chat */}
-        <View className="bg-black-100 p-4 flex-row items-center justify-between border-b border-gray-700">
-          <TouchableOpacity onPress={() => router.back()} className="p-2">
-            <Image source={icons.leftArrow} className="w-6 h-6" tintColor="#FFF" />
-          </TouchableOpacity>
-          <Text className="text-white text-xl font-psemibold flex-1 text-center">
-            Chat ECG: <Text>{ecgDetails?.patientName || 'Carregando...'}</Text>
-          </Text>
-          <View className="w-6 h-6" /> 
-        </View>
-
-        {/* Lista de Mensagens */}
         <FlatList
           ref={flatListRef}
           data={messages}
-          keyExtractor={(item) => item.id} // MUDANÇA AQUI: Usa item.id
-          renderItem={renderMessage}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, flexGrow: 1 }}
-          className="flex-1"
+          keyExtractor={(item) => item.id}
+          renderItem={MemoizedMessageItem}
+          className="px-4 py-2 flex-1"
+          onContentSizeChange={() => {
+            if (flatListRef.current) {
+              flatListRef.current.scrollToEnd({ animated: true });
+            }
+          }}
           ListEmptyComponent={() => (
             <View className="flex-1 justify-center items-center">
-              <Text className="text-gray-400 text-lg">Nenhuma mensagem ainda. Seja o primeiro a conversar!</Text>
+              <Text className="text-gray-400 text-lg">Nenhuma mensagem ainda.</Text>
+              <Text className="text-gray-400 text-sm">Seja o primeiro a enviar uma mensagem!</Text>
             </View>
           )}
         />
-
-        {/* Input de Mensagem */}
-        <View className="flex-row items-center p-4 bg-black-100 border-t border-gray-700">
+        <View className="flex-row items-center px-4 py-3 border-t border-gray-700 bg-black-100">
           <TextInput
-            className="flex-1 h-12 bg-gray-800 text-white rounded-lg px-4 mr-2"
+            className="flex-1 h-12 bg-gray-800 rounded-lg px-4 text-white font-pregular text-base mr-3"
             placeholder="Digite sua mensagem..."
-            placeholderTextColor="#CDCDE0"
+            placeholderTextColor="#9CA3AF"
             value={newMessage}
             onChangeText={setNewMessage}
-            multiline={true}
-            style={{ maxHeight: 100 }}
+            multiline
+            maxLength={500}
+            editable={!sendingMessage}
           />
           <TouchableOpacity
             onPress={handleSendMessage}
-            className="bg-blue-600 p-3 rounded-lg"
-            disabled={!newMessage.trim()}
+            className={`p-3 rounded-lg ${sendingMessage ? 'bg-gray-600' : 'bg-secondary-100'}`}
+            disabled={sendingMessage || !newMessage.trim()}
           >
-            <Image source={icons.send} className="w-6 h-6" tintColor="#FFF" />
+            {sendingMessage ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <Image source={icons.send} className="w-6 h-6" tintColor="#FFF" />
+            )}
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>

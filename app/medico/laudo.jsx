@@ -1,16 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, Image, TouchableOpacity, ActivityIndicator, Alert, Dimensions, StatusBar } from 'react-native'; 
+import { View, Text, ScrollView, Image, TouchableOpacity, ActivityIndicator, Alert, StatusBar, Platform } from 'react-native'; 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import FormField from '../../components/FormField'; 
 import CustomButton from '../../components/CustomButton'; 
-import EcgCard from '../../components/EcgCard'; 
 import { icons } from '../../constants'; 
-import { getPendingEcgs, updateEcgLaudation, getEcgById } from '../../lib/firebase'; 
+import { getPendingEcgs, updateEcgLaudation } from '../../lib/firebase'; 
 import { useGlobalContext } from '../../context/GlobalProvider';
 import { useRouter } from 'expo-router'; 
 import Modal from 'react-native-modal'; 
 import ImageViewer from 'react-native-image-zoom-viewer'; 
-import * as ScreenOrientation from 'expo-screen-orientation'; 
 
 const Laudo = () => {
   const { user } = useGlobalContext();
@@ -20,95 +18,47 @@ const Laudo = () => {
   const [loadingEcgs, setLoadingEcgs] = useState(false); 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showFullImage, setShowFullImage] = useState(false); 
-
   const [laudoForm, setLaudoForm] = useState({
-    ritmo: '',
-    fc: '',
-    pr: '',
-    qrs: '',
-    eixo: '',
-    brc: false, 
-    brd: false, 
-    repolarizacao: '',
-    outrosAchados: '', 
-    laudoFinal: '', 
+    ritmo: '', fc: '', pr: '', qrs: '', eixo: '',
+    brc: false, brd: false, repolarizacao: '', outrosAchados: '', laudoFinal: ''
   });
 
-  const ritmoOptions = [
-    'Sinusal', 'Ectópico Atrial', 'Juncional', 
-    'Fibrilação Atrial', 'Flutter Atrial', 'MP (Marcapasso)', 'Outro'
-  ];
-  const repolarizacaoOptions = [
-    'Normal', 'Alterado Difuso da Repolarização Ventricular', 
-    'Infradesnivelamento', 'Supradesnivelamento', 'Outro'
-  ];
+  const ritmoOptions = ['Sinusal', 'Ectópico Atrial', 'Juncional', 'Fibrilação Atrial', 'Flutter Atrial', 'MP (Marcapasso)', 'Outro'];
+  const repolarizacaoOptions = ['Normal', 'Alterado Difuso da Repolarização Ventricular', 'Infradesnivelamento', 'Supradesnivelamento', 'Outro'];
 
-  const generateLaudoFinal = (currentForm) => {
-    let finalContent = [];
-
-    if (currentForm.ritmo) {
-      finalContent.push(`Ritmo: ${currentForm.ritmo}.`);
-    }
-    if (currentForm.fc) {
-      finalContent.push(`Frequência Cardíaca: ${currentForm.fc} bpm.`);
-    }
-    if (currentForm.pr) {
-      finalContent.push(`Intervalo PR: ${currentForm.pr} ms.`);
-    }
-    if (currentForm.qrs) {
-      finalContent.push(`Duração QRS: ${currentForm.qrs} ms.`);
-    }
-    if (currentForm.eixo) {
-      finalContent.push(`Eixo elétrico: ${currentForm.eixo}.`);
-    }
+  const generateLaudoFinal = (form) => {
+    let lines = [];
+    if (form.ritmo) lines.push(`Ritmo: ${form.ritmo}.`);
+    if (form.fc) lines.push(`Frequência Cardíaca: ${form.fc} bpm.`);
+    if (form.pr) lines.push(`Intervalo PR: ${form.pr} ms.`);
+    if (form.qrs) lines.push(`Duração QRS: ${form.qrs} ms.`);
+    if (form.eixo) lines.push(`Eixo elétrico: ${form.eixo}.`);
     let bloqueios = [];
-    if (currentForm.brc) {
-      bloqueios.push('Bloqueio de Ramo Completo (BRC)');
-    }
-    if (currentForm.brd) {
-      bloqueios.push('Bloqueio de Ramo Direito (BRD)');
-    }
-    if (bloqueios.length > 0) {
-      finalContent.push(`Bloqueios de Ramo: ${bloqueios.join(' e ')}.`);
-    }
-    if (currentForm.repolarizacao) {
-      finalContent.push(`Repolarização: ${currentForm.repolarizacao}.`);
-    }
-    if (currentForm.outrosAchados) {
-      finalContent.push(`Outros Achados: ${currentForm.outrosAchados}.`);
-    }
-
-    return finalContent.join('\n'); 
+    if (form.brc) bloqueios.push('BRC');
+    if (form.brd) bloqueios.push('BRD');
+    if (bloqueios.length) lines.push(`Bloqueios de Ramo: ${bloqueios.join(' e ')}.`);
+    if (form.repolarizacao) lines.push(`Repolarização: ${form.repolarizacao}.`);
+    if (form.outrosAchados) lines.push(`Outros Achados: ${form.outrosAchados}.`);
+    return lines.join('\n');
   };
 
-  const updateFormAndGenerateLaudo = (field, value) => { 
-    setLaudoForm(prevForm => {
-      const updatedForm = { ...prevForm, [field]: value };
-      if (field !== 'laudoFinal') { 
-        updatedForm.laudoFinal = generateLaudoFinal(updatedForm);
-      }
-      return updatedForm;
+  const updateFormAndGenerateLaudo = (field, value) => {
+    setLaudoForm(prev => {
+      const updated = { ...prev, [field]: value };
+      if (field !== 'laudoFinal') updated.laudoFinal = generateLaudoFinal(updated);
+      return updated;
     });
   };
 
   const fetchAndSelectFirstEcg = useCallback(async (priorityType) => {
     setLoadingEcgs(true);
-    setSelectedEcg(null); 
-    setLaudoForm({ 
-      ritmo: '', fc: '', pr: '', qrs: '', eixo: '',
-      brc: false, brd: false, repolarizacao: '',
-      outrosAchados: '', laudoFinal: '',
-    });
+    setSelectedEcg(null);
+    setLaudoForm({ ritmo: '', fc: '', pr: '', qrs: '', eixo: '', brc: false, brd: false, repolarizacao: '', outrosAchados: '', laudoFinal: '' });
     try {
       const ecgs = await getPendingEcgs(priorityType); 
-      if (ecgs.length > 0) {
-        setSelectedEcg(ecgs[0]); 
-      } else {
-        setSelectedEcg(null); 
-      }
+      if (ecgs.length > 0) setSelectedEcg(ecgs[0]);
     } catch (error) {
-      Alert.alert('Erro', 'Não foi possível carregar os exames pendentes.');
-      console.error('Erro ao buscar ECGs pendentes:', error);
+      Alert.alert('Erro', 'Não foi possível carregar os exames.');
     } finally {
       setLoadingEcgs(false);
     }
@@ -118,86 +68,33 @@ const Laudo = () => {
     if (user?.role === 'medico' && selectedPriorityType) {
       fetchAndSelectFirstEcg(selectedPriorityType);
     }
-  }, [user, selectedPriorityType, fetchAndSelectFirstEcg]);
-
-  useEffect(() => {
-    const lockOrientation = async () => {
-      if (showFullImage) {
-        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.ALL);
-        StatusBar.setHidden(true); 
-      } else {
-        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
-        StatusBar.setHidden(false); 
-      }
-    };
-    lockOrientation();
-
-    const subscription = Dimensions.addEventListener('change', ({ window: { width, height } }) => {
-      console.log('Dimensões da tela mudaram:', { width, height });
-    });
-
-    return () => {
-      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
-      StatusBar.setHidden(false);
-      subscription.remove(); 
-    };
-  }, [showFullImage]); 
+  }, [user, selectedPriorityType]);
 
   const submitLaudo = async () => {
-    if (!selectedEcg) {
-      Alert.alert('Erro', 'Nenhum ECG selecionado para laudar.');
+    if (!selectedEcg || !laudoForm.laudoFinal || !user?.uid) {
+      Alert.alert('Erro', 'Preencha todos os campos.');
       return;
     }
-    if (!laudoForm.laudoFinal) {
-      Alert.alert('Campos Obrigatórios', 'Por favor, preencha o campo de Laudo Final.');
-      return;
-    }
-    if (!user || !user.uid) { 
-      Alert.alert('Erro', 'Usuário não autenticado. Faça login novamente.');
-      return;
-    }
-
     setIsSubmitting(true);
     try {
-      const structuredLaudationDetails = {
-        ritmo: laudoForm.ritmo,
-        fc: laudoForm.fc,
-        pr: laudoForm.pr,
-        qrs: laudoForm.qrs,
-        eixo: laudoForm.eixo, 
-        brc: laudoForm.brc,
-        brd: laudoForm.brd,
-        repolarizacao: laudoForm.repolarizacao,
-        outrosAchados: laudoForm.outrosAchados,
-      };
-
-      await updateEcgLaudation(
-        selectedEcg.id, 
-        laudoForm.laudoFinal,
-        user.uid, 
-        structuredLaudationDetails 
-      );
-      
-      Alert.alert('Sucesso', 'Laudo enviado com sucesso!');
-      
-      // >>> ALTERAÇÃO AQUI: Navegação após o laudo <<<
-      setSelectedEcg(null); // Limpa o ECG selecionado
-      setLaudoForm({ // Reseta o formulário de laudo
-        ritmo: '', fc: '', pr: '', qrs: '', eixo: '',
-        brc: false, brd: false, repolarizacao: '',
-        outrosAchados: '', laudoFinal: '',
+      await updateEcgLaudation(selectedEcg.id, laudoForm.laudoFinal, user.uid, {
+        ritmo: laudoForm.ritmo, fc: laudoForm.fc, pr: laudoForm.pr, qrs: laudoForm.qrs,
+        eixo: laudoForm.eixo, brc: laudoForm.brc, brd: laudoForm.brd, repolarizacao: laudoForm.repolarizacao, outrosAchados: laudoForm.outrosAchados
       });
-      setSelectedPriorityType(null); // Volta para a tela de seleção de prioridade (Urgente/Eletivo)
-      
-      // Se você quiser voltar para a Home em vez da seleção de prioridade, use:
-      // router.replace('/home'); 
-
-    } catch (error) {
-      Alert.alert('Erro no Laudo', error.message);
-      console.error('Erro ao submeter laudo:', error);
+      Alert.alert('Sucesso', 'Laudo enviado!');
+      setSelectedEcg(null);
+      setSelectedPriorityType(null);
+    } catch (err) {
+      Alert.alert('Erro', err.message);
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleBack = () => router.replace('/home');
+  const handleOpenChat = () => {
+    if (selectedEcg?.id) router.push(`/chat/${selectedEcg.id}`);
+    else Alert.alert('Erro', 'Selecione um ECG');
   };
 
   const RadioGroup = ({ label, options, selectedOption, onSelect }) => (
@@ -205,13 +102,8 @@ const Laudo = () => {
       <Text className="text-base text-gray-100 font-pmedium mb-2">{label}</Text>
       <View className="flex-row flex-wrap">
         {options.map((option, index) => (
-          <TouchableOpacity
-            key={index}
-            onPress={() => onSelect(option)}
-            className={`py-2 px-4 rounded-lg mr-2 mb-2 ${
-              selectedOption === option ? 'bg-blue-600' : 'bg-gray-800 border border-gray-700'
-            }`}
-          >
+          <TouchableOpacity key={index} onPress={() => onSelect(option)}
+            className={`py-2 px-4 rounded-lg mr-2 mb-2 ${selectedOption === option ? 'bg-blue-600' : 'bg-gray-800 border border-gray-700'}`}>
             <Text className="text-white font-pmedium">{option}</Text>
           </TouchableOpacity>
         ))}
@@ -219,211 +111,72 @@ const Laudo = () => {
     </View>
   );
 
-  const handleBack = () => {
-    router.replace('/home'); 
-  };
-
-  const handleOpenChat = () => {
-    if (!selectedEcg || !selectedEcg.id) {
-      Alert.alert('Erro', 'Selecione um ECG para abrir o chat. Por favor, certifique-se de que um ECG esteja carregado.');
-      return;
-    }
-
-    console.log('Tentando navegar para o chat com ECG ID:', selectedEcg.id);
-
-    try {
-      router.push(`/chat/${selectedEcg.id}`); 
-    } catch (error) {
-      console.error("Erro ao tentar navegar para o chat:", error);
-      Alert.alert('Erro de Navegação', 'Não foi possível abrir o chat. Por favor, verifique se a rota do chat está configurada corretamente no seu projeto Expo.');
-    }
-  };
-
   return (
     <SafeAreaView className="bg-primary h-full flex-1">
       <ScrollView className="px-4 my-6">
         <TouchableOpacity onPress={handleBack} className="flex-row items-center mb-6">
           <Image source={icons.leftArrow} className="w-6 h-6 mr-2" resizeMode="contain" tintColor="#FFFFFF" />
-          <Text className="text-white text-base font-pmedium">Voltar para Home</Text>
+          <Text className="text-white text-base font-pmedium">Voltar</Text>
         </TouchableOpacity>
+        <Text className="text-2xl text-white font-psemibold mb-6">Laudar Eletrocardiogramas</Text>
 
-        <Text className="text-2xl text-white font-psemibold mb-6">
-          Laudar Eletrocardiogramas
-        </Text>
-
-        {!selectedPriorityType ? ( 
+        {!selectedPriorityType ? (
           <View className="flex-1 justify-center items-center h-80">
-            <Text className="text-xl text-white font-pmedium mb-4">Escolha o tipo de laudo:</Text>
+            <Text className="text-xl text-white font-pmedium mb-4">Escolha o tipo:</Text>
             <View className="flex-row space-x-4 mt-4">
-              <CustomButton
-                title="Laudar Urgente"
-                handlePress={() => setSelectedPriorityType('Urgente')}
-                containerStyles="bg-red-600 w-1/2" 
-              />
-              <CustomButton
-                title="Laudar Eletivo"
-                handlePress={() => setSelectedPriorityType('Eletivo')}
-                containerStyles="bg-orange-500 w-1/2" 
-              />
+              <CustomButton title="Urgente" handlePress={() => setSelectedPriorityType('Urgente')} containerStyles="bg-red-600 w-1/2" />
+              <CustomButton title="Eletivo" handlePress={() => setSelectedPriorityType('Eletivo')} containerStyles="bg-orange-500 w-1/2" />
             </View>
           </View>
-        ) : loadingEcgs ? ( 
+        ) : loadingEcgs ? (
           <ActivityIndicator size="large" color="#FFA001" className="mt-10" />
-        ) : !selectedEcg ? ( 
+        ) : !selectedEcg ? (
           <View className="flex-1 justify-center items-center h-40">
-            <Text className="text-gray-100 font-pmedium text-lg">
-              Não há ECGs "{selectedPriorityType}" pendentes de laudo.
-            </Text>
-            <CustomButton
-              title="Voltar para Tipos de Laudo"
-              handlePress={() => setSelectedPriorityType(null)}
-              containerStyles="mt-4 bg-gray-700"
-            />
+            <Text className="text-gray-100 font-pmedium text-lg">Nenhum ECG pendente.</Text>
+            <CustomButton title="Voltar" handlePress={() => setSelectedPriorityType(null)} containerStyles="mt-4 bg-gray-700" />
           </View>
-        ) : ( 
+        ) : (
           <View className="mt-8 p-4 bg-black-100 rounded-xl border-2 border-black-200">
-            <Text className="text-xl text-white font-psemibold mb-4">Laudar ECG de {selectedEcg.patientName}</Text>
-            
+            <Text className="text-xl text-white font-psemibold mb-4">Paciente: {selectedEcg.patientName}</Text>
             <TouchableOpacity onPress={() => setShowFullImage(true)} className="w-full h-64 rounded-lg mb-4">
-              <Image
-                source={{ uri: selectedEcg.imageUrl }}
-                className="w-full h-full"
-                resizeMode="contain"
-              />
+              <Image source={{ uri: selectedEcg.imageUrl }} className="w-full h-full" resizeMode="contain" />
             </TouchableOpacity>
-            
+
             <View className="mb-4">
               <Text className="text-gray-100 font-pregular">Idade: {selectedEcg.age}</Text>
-              <Text className="text-gray-100 font-pregular">Sexo: {selectedEcg.sex}</Text> 
+              <Text className="text-gray-100 font-pregular">Sexo: {selectedEcg.sex}</Text>
               <Text className="text-gray-100 font-pregular">Marcapasso: {selectedEcg.hasPacemaker}</Text>
               <Text className="text-gray-100 font-pregular">Prioridade: {selectedEcg.priority}</Text>
-              {selectedEcg.notes && <Text className="text-gray-100 font-pregular">Notas: {selectedEcg.notes}</Text>}
             </View>
 
-            <RadioGroup
-              label="Ritmo"
-              options={ritmoOptions}
-              selectedOption={laudoForm.ritmo}
-              onSelect={(option) => updateFormAndGenerateLaudo('ritmo', option)}
-            />
-
-            <FormField
-              title="FC (bpm)"
-              value={laudoForm.fc}
-              placeholder="Frequência Cardíaca..."
-              handleChangeText={(e) => updateFormAndGenerateLaudo('fc', e)}
-              keyboardType="numeric"
-              otherStyles="mt-7"
-            />
-            <FormField
-              title="PR (ms)"
-              value={laudoForm.pr}
-              placeholder="Intervalo PR..."
-              handleChangeText={(e) => updateFormAndGenerateLaudo('pr', e)}
-              keyboardType="numeric"
-              otherStyles="mt-7"
-            />
-            <FormField
-              title="QRS (ms)"
-              value={laudoForm.qrs}
-              placeholder="Duração QRS..."
-              handleChangeText={(e) => updateFormAndGenerateLaudo('qrs', e)}
-              keyboardType="numeric"
-              otherStyles="mt-7"
-            />
-            <FormField
-              title="Eixo"
-              value={laudoForm.eixo}
-              placeholder="Eixo elétrico (ex: 90°)..."
-              handleChangeText={(e) => updateFormAndGenerateLaudo('eixo', e)}
-              otherStyles="mt-7"
-            />
-
-            <View className="mt-7">
-              <Text className="text-base text-gray-100 font-pmedium mb-2">Bloqueios de Ramo</Text>
-              <View className="flex-row space-x-4">
-                <TouchableOpacity
-                  onPress={() => updateFormAndGenerateLaudo('brc', !laudoForm.brc)}
-                  className={`py-2 px-5 rounded-lg ${laudoForm.brc ? 'bg-blue-600' : 'bg-gray-800 border border-gray-700'}`}
-                >
-                  <Text className="text-white font-pmedium">BRC</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => updateFormAndGenerateLaudo('brd', !laudoForm.brd)}
-                  className={`py-2 px-5 rounded-lg ${laudoForm.brd ? 'bg-blue-600' : 'bg-gray-800 border border-gray-700'}`}
-                >
-                  <Text className="text-white font-pmedium">BRD</Text>
-                </TouchableOpacity>
-              </View>
+            <RadioGroup label="Ritmo" options={ritmoOptions} selectedOption={laudoForm.ritmo} onSelect={(option) => updateFormAndGenerateLaudo('ritmo', option)} />
+            <FormField title="FC" value={laudoForm.fc} handleChangeText={(e) => updateFormAndGenerateLaudo('fc', e)} keyboardType="numeric" otherStyles="mt-7" />
+            <FormField title="PR" value={laudoForm.pr} handleChangeText={(e) => updateFormAndGenerateLaudo('pr', e)} keyboardType="numeric" otherStyles="mt-7" />
+            <FormField title="QRS" value={laudoForm.qrs} handleChangeText={(e) => updateFormAndGenerateLaudo('qrs', e)} keyboardType="numeric" otherStyles="mt-7" />
+            <FormField title="Eixo" value={laudoForm.eixo} handleChangeText={(e) => updateFormAndGenerateLaudo('eixo', e)} otherStyles="mt-7" />
+            <View className="mt-7 flex-row space-x-4">
+              <TouchableOpacity onPress={() => updateFormAndGenerateLaudo('brc', !laudoForm.brc)} className={`py-2 px-5 rounded-lg ${laudoForm.brc ? 'bg-blue-600' : 'bg-gray-800 border border-gray-700'}`}><Text className="text-white">BRC</Text></TouchableOpacity>
+              <TouchableOpacity onPress={() => updateFormAndGenerateLaudo('brd', !laudoForm.brd)} className={`py-2 px-5 rounded-lg ${laudoForm.brd ? 'bg-blue-600' : 'bg-gray-800 border border-gray-700'}`}><Text className="text-white">BRD</Text></TouchableOpacity>
             </View>
-
-            <RadioGroup
-              label="Repolarização"
-              options={repolarizacaoOptions}
-              selectedOption={laudoForm.repolarizacao}
-              onSelect={(option) => updateFormAndGenerateLaudo('repolarizacao', option)}
-            />
-
-            <FormField
-              title="Outros Achados"
-              value={laudoForm.outrosAchados}
-              placeholder="Descreva outros achados não listados..."
-              handleChangeText={(e) => updateFormAndGenerateLaudo('outrosAchados', e)} 
-              otherStyles="mt-7"
-              multiline={true} 
-              numberOfLines={4} 
-            />
-
-            <FormField
-              title="Laudo Final Completo"
-              value={laudoForm.laudoFinal}
-              placeholder="Escreva o laudo completo do ECG aqui..."
-              handleChangeText={(e) => updateFormAndGenerateLaudo('laudoFinal', e)}
-              otherStyles="mt-7"
-              multiline={true} 
-              numberOfLines={10} 
-            />
-
-            <CustomButton
-              title="Submeter Laudo"
-              handlePress={submitLaudo}
-              containerStyles="mt-7"
-              isLoading={isSubmitting}
-            />
-
-            <CustomButton
-              title="Abrir Chat "
-              handlePress={handleOpenChat}
-              containerStyles="mt-4 mb-10 bg-green-600" 
-            />
-
+            <RadioGroup label="Repolarização" options={repolarizacaoOptions} selectedOption={laudoForm.repolarizacao} onSelect={(option) => updateFormAndGenerateLaudo('repolarizacao', option)} />
+            <FormField title="Outros Achados" value={laudoForm.outrosAchados} handleChangeText={(e) => updateFormAndGenerateLaudo('outrosAchados', e)} otherStyles="mt-7" multiline />
+            <FormField title="Laudo Final" value={laudoForm.laudoFinal} handleChangeText={(e) => updateFormAndGenerateLaudo('laudoFinal', e)} otherStyles="mt-7" multiline />
+            <CustomButton title="Submeter Laudo" handlePress={submitLaudo} containerStyles="mt-7" isLoading={isSubmitting} />
+            <CustomButton title="Abrir Chat" handlePress={handleOpenChat} containerStyles="mt-4 mb-10 bg-green-600" />
           </View>
         )}
       </ScrollView>
 
-      <Modal 
-        isVisible={showFullImage}
-        onModalWillShow={() => { /* Gerenciado pelo useEffect */ }}
-        onModalHide={() => { /* Gerenciado pelo useEffect */ }}
-        style={{ margin: 0, backgroundColor: 'black' }} 
-      >
+      <Modal isVisible={showFullImage} style={{ margin: 0, backgroundColor: 'black' }}>
         {selectedEcg && (
-          <ImageViewer
-            imageUrls={[{ url: selectedEcg.imageUrl }]}
-            enableSwipeDown={true} 
-            onSwipeDown={() => setShowFullImage(false)} 
-            renderIndicator={() => null} 
+          <ImageViewer imageUrls={[{ url: selectedEcg.imageUrl }]} enableSwipeDown onSwipeDown={() => setShowFullImage(false)} renderIndicator={() => null} style={{ flex: 1, backgroundColor: 'black' }}
             renderHeader={() => (
-              <SafeAreaView className="absolute top-0 left-0 right-0 z-50 p-4">
-                <TouchableOpacity
-                  onPress={() => setShowFullImage(false)}
-                  className="p-3 rounded-full bg-gray-800 self-end" 
-                >
+              <View style={{ position: 'absolute', top: Platform.OS === 'ios' ? 40 : 20, right: 20, zIndex: 50 }}>
+                <TouchableOpacity onPress={() => setShowFullImage(false)} className="p-3 rounded-full bg-gray-800">
                   <Image source={icons.close} className="w-6 h-6" tintColor="#FFFFFF" />
                 </TouchableOpacity>
-              </SafeAreaView>
+              </View>
             )}
-            style={{ flex: 1, backgroundColor: 'black' }}
           />
         )}
       </Modal>
