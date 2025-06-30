@@ -15,7 +15,11 @@
     },
     "ios": {
       "supportsTablet": true,
-      "package": "com.tosi.aora"
+      "package": "com.tosi.aora",
+       "infoPlist": {
+        "NSCameraUsageDescription": "Este aplicativo precisa de acesso à sua câmera para permitir que você tire fotos de ECGs para upload.",
+        "NSPhotoLibraryUsageDescription": "Este aplicativo precisa de acesso à sua galeria de fotos para permitir que você selecione imagens de ECGs para upload."
+      }
     },
     "android": {
       "adaptiveIcon": {

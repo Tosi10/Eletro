@@ -14,7 +14,7 @@ export default function App() {
   return (
     <SafeAreaView className="h-full flex-1">
       <ImageBackground
-        source={images.cardio2m7n}
+        source={images.cardio2}
         resizeMode="cover"
         style={{ flex: 1, width: '100%', height: '100%' }}
       >
@@ -33,7 +33,7 @@ export default function App() {
             {/* Remova a imagem do topo, pois agora é o background */}
 
             <View className="relative mt-5">
-              <Text className="text-5xl text-white font-bold text-center">
+              <Text className="text-7xl text-white font-bold text-center">
                 V6 Core{' '}
                 {/*<Text className="text-secondary-200">M2</Text>*/}
               </Text>
