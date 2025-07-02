@@ -2,7 +2,7 @@ import { StyleSheet, Text, View, FlatList, TouchableOpacity, ImageBackground, Im
 import * as Animatable from 'react-native-animatable';
 import { useState, useRef } from 'react';
 import { icons } from '../constants';
-import { useVideoPlayer, VideoView } from "expo-video";
+
 import { WebView } from 'react-native-webview';
 const zoomIn = {
   0: { scale: 0.9 },

@@ -1,47 +1,34 @@
 import { Text, View, FlatList, Image, RefreshControl, Alert, TouchableOpacity, ActivityIndicator } from 'react-native';
-import React, { useEffect, useState, useCallback } from 'react'; 
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { icons, images } from '../../constants';
 import EmptyState from '../../components/EmptyState';
-// Importa 'db' (embora não seja mais usado diretamente aqui para contagem global)
-import { getUserPosts, signOut, getPendingEcgs, getLaudedEcgsByDoctorId, db } from '../../lib/firebase'; 
-import useFirebaseData from '../../lib/useFirebaseData'; 
+import { getUserPosts, signOut, getPendingEcgs, getLaudedEcgsByDoctorId } from '../../lib/firebase';
+import useFirebaseData from '../../lib/useFirebaseData';
 import { useGlobalContext } from '../../context/GlobalProvider';
 import InfoBox from '../../components/InfoBox';
 import { router } from 'expo-router';
-
 import EcgCard from '../../components/EcgCard';
-
-// Removida importação de 'collection', 'query', 'where', 'onSnapshot', 'orderBy'
-// pois a lógica de contagem global foi movida para EcgCard.
+import WeeklyCalendarPicker from '../../components/WeeklyCalendarPicker';
 
 const Profile = () => {
   const { user, setUser, setIsLogged, isLoading: isGlobalLoading } = useGlobalContext();
-  // Removidos estados de contagem global de mensagens não lidas
-  // const [unreadMessageCount, setUnreadMessageCount] = useState(0);
-  // const [loadingUnread, setLoadingUnread] = useState(true);
-  // const unreadListenersAndCounts = useRef({}); 
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
 
   const fetchEcgsFunction = useCallback(() => {
-    if (!user?.uid) { 
-      console.log('Profile: user.uid não disponível para buscar ECGs.');
-      return Promise.resolve([]);
-    }
-    
+    if (!user?.uid) return Promise.resolve([]);
     if (user?.role === 'enfermeiro') {
-      console.log('Profile: Buscando ECGs enviados pelo enfermeiro:', user.uid);
+      
       return getUserPosts(user.uid);
     } else if (user?.role === 'medico') {
-      console.log('Profile: Buscando ECGs laudados pelo médico:', user.uid);
       return getLaudedEcgsByDoctorId(user.uid);
     }
-    console.warn('Profile: Papel do usuário não reconhecido, retornando ECGs vazios.');
     return Promise.resolve([]);
   }, [user?.uid, user?.role]);
 
   const { data: ecgs, isLoading: areEcgsLoading, refetch } = useFirebaseData(
     fetchEcgsFunction,
-    [user?.uid, user?.role] 
+    [user?.uid, user?.role]
   );
 
   const [pendingEcgsCount, setPendingEcgsCount] = useState(0);
@@ -51,10 +38,8 @@ const Profile = () => {
     if (user?.role === 'medico' && user?.uid) {
       setFetchingPending(true);
       try {
-        console.log('Profile: Buscando ECGs pendentes para o médico...');
         const allPendingEcgs = await getPendingEcgs();
         setPendingEcgsCount(allPendingEcgs.length);
-        console.log('Profile: ECGs pendentes encontrados:', allPendingEcgs.length);
       } catch (error) {
         console.error("Erro ao buscar ECGs pendentes para o médico:", error);
         setPendingEcgsCount(0);
@@ -67,36 +52,36 @@ const Profile = () => {
   }, [user?.role, user?.uid]);
 
   useEffect(() => {
-    fetchPendingForDoctor(); 
+    fetchPendingForDoctor();
   }, [user, fetchPendingForDoctor]);
-
-  // Removido o useEffect para a contagem global de mensagens não lidas
-  /*
-  useEffect(() => {
-    // ... (toda a lógica de contagem global de mensagens foi removida daqui)
-  }, [user, ecgs, areEcgsLoading, db]);
-  */
 
   const [refreshing, setRefreshing] = useState(false);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await refetch(); 
-    await fetchPendingForDoctor(); 
+    await refetch();
+    await fetchPendingForDoctor();
     setRefreshing(false);
   };
 
-  const handleLogout = async () => { 
+  const handleLogout = async () => {
     try {
-      await signOut(); 
+      await signOut();
       setUser(null);
       setIsLogged(false);
       router.replace('/sign-in');
     } catch (error) {
       Alert.alert('Erro ao Sair', error.message);
-      console.error('Erro durante o logout:', error);
     }
   };
+
+  const filteredEcgs = useMemo(() => {
+    if (!selectedDate) return ecgs;
+    return ecgs.filter(ecg => {
+      const ecgDate = new Date(ecg.createdAt?.seconds * 1000).toISOString().slice(0, 10);
+      return ecgDate === selectedDate;
+    });
+  }, [ecgs, selectedDate]);
 
   const laudedsOrSentEcgsCount = ecgs.length || 0;
 
@@ -112,17 +97,16 @@ const Profile = () => {
   return (
     <SafeAreaView className="bg-primary h-full">
       <FlatList
-        data={ecgs}
-        keyExtractor={(item) => item.id} 
+        data={filteredEcgs}
+        keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
-          // PASSANDO currentUserId PARA O EcgCard
-          <EcgCard ecg={item} currentUserId={user?.uid} /> 
+          <EcgCard ecg={item} currentUserId={user?.uid} />
         )}
         ListHeaderComponent={() => (
           <View className="w-full justify-center items-center mt-6 mb-12 px-4">
             <TouchableOpacity
               className="w-full items-end mb-10"
-              onPress={handleLogout} 
+              onPress={handleLogout}
             >
               <Image source={icons.logout}
                 resizeMode='contain' className="w-6 h-6" />
@@ -130,9 +114,9 @@ const Profile = () => {
 
             <View className="w-24 h-24 border border-secondary rounded-full justify-center items-center p-1">
               <Image
-                source={images.profile} 
-                className="w-full h-full rounded-full" 
-                resizeMode='cover' 
+                source={images.profile}
+                className="w-full h-full rounded-full"
+                resizeMode='cover'
               />
             </View>
 
@@ -157,48 +141,34 @@ const Profile = () => {
                     titleStyles="text-xl"
                   />
                 </>
-              ) : ( 
+              ) : (
                 <>
                   <InfoBox
-                    title={laudedsOrSentEcgsCount} 
+                    title={laudedsOrSentEcgsCount}
                     subtitle="ECGs Laudados"
                     containerStyles="mr-10"
                     titleStyles="text-xl"
                   />
                   <InfoBox
-                    title={pendingEcgsCount} 
+                    title={pendingEcgsCount}
                     subtitle="ECGs Pendentes"
                     titleStyles="text-xl"
                   />
                 </>
               )}
             </View>
-
-            {/* REMOVIDO: Botão Abrir Chat global com Contador de Mensagens Não Lidas */}
-            {/*
-            <TouchableOpacity
-              onPress={() => router.push('/chat-inbox')} 
-              className="flex-row items-center justify-center bg-secondary-100 rounded-xl min-h-[60px] w-full px-4 mt-7"
-            >
-              <Text className="text-lg text-white font-psemibold">Abrir Chat</Text>
-              {loadingUnread ? (
-                <ActivityIndicator size="small" color="#FFFFFF" className="ml-2" />
-              ) : unreadMessageCount > 0 ? (
-                <View className="ml-3 bg-red-500 rounded-full w-7 h-7 flex items-center justify-center">
-                  <Text className="text-white text-sm font-pbold">{unreadMessageCount}</Text>
-                </View>
-              ) : null}
-            </TouchableOpacity>
-            */}
-
+            <WeeklyCalendarPicker
+              onSelectDate={setSelectedDate}
+              selectedDate={selectedDate}
+            />
           </View>
         )}
         ListEmptyComponent={() => (
           <EmptyState
-            title={`Nenhum ECG ${user?.role === 'medico' ? 'Laudado' : 'Enviado'} `}
-            subtitle={user?.role === 'medico' ? 
-                      "Você ainda não laudou nenhum eletrocardiograma." : 
-                      "Você ainda não enviou nenhum eletrocardiograma."}
+            title={`Nenhum ECG ${user?.role === 'medico' ? 'Laudado' : 'Enviado'} para esta data`}
+            subtitle={user?.role === 'medico' ?
+                      "Você não laudou nenhum eletrocardiograma neste dia." :
+                      "Você não enviou nenhum eletrocardiograma neste dia."}
           />
         )}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#fff" />}
@@ -208,3 +178,4 @@ const Profile = () => {
 };
 
 export default Profile;
+
